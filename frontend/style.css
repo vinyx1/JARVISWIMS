@@ -997,3 +997,8 @@ progress {
   .phone-menu-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:0 18px; }
   .phone-panel[open] { max-width:660px; }
 }
+
+/* hands-free + where Jarvis speaks (Paul) */
+.phone-voice-options { display: grid; gap: 6px; margin: 10px 0; }
+.phone-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+.phone-toggle input { width: 18px; height: 18px; accent-color: #f2b544; }

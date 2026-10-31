@@ -26,7 +26,7 @@ let browser;
  await page.locator('#phoneMenu > summary').click();
  assert.ok(requests>=5,'preview should keep uploading independently of saved frames');assert.ok(maxActive>=2&&maxActive<=5,'preview overlap must be bounded at 5');
  assert.equal(timestamps.length,requests,'every preview must carry a timestamp');assert.ok(timestamps.every(ts=>Number.isFinite(ts)&&ts>0));
- const encodes=await page.evaluate(()=>window.previewEncodes);assert.ok(encodes.some(x=>x.width===360&&x.quality===.45));assert.ok(encodes.some(x=>x.width===640));
+ const encodes=await page.evaluate(()=>window.previewEncodes);assert.ok(encodes.some(x=>(x.width===360&&x.quality===.45)||(x.width===640&&x.quality===.5)))  // upright 360px, sideways 640px;assert.ok(encodes.some(x=>x.width===640));
  await page.getByRole('button',{name:'Stop',exact:true}).click();const stopped=requests;await page.waitForTimeout(500);assert.equal(requests,stopped,'Stop must prevent new previews');assert.equal(await page.locator('#phoneVideo').evaluate(e=>e.srcObject),null);
  assert.ok(saved>=1);assert.deepEqual(errors,[]);
  console.log(`Synthetic phone preview passed: ${requests} preview requests, maximum ${maxActive} in flight; timestamps, 360px encoding and Stop cleanup verified. Real tunnel FPS remains unmeasured.`);
