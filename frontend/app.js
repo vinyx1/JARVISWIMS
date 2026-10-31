@@ -1,141 +1,133 @@
-import {createApi} from './api.js';
-import {createCameraController,listCameras,captureFrame} from './camera.js';
-import {createCaptureLoop,validateCalibration,formatSeenAt,createLatestPoller,safeFrameUrl} from './core.js';
-import {addMessage,renderAnswer} from './render.js';
-import {createCalibrationWizard} from './calibration.js';
-const $=id=>document.getElementById(id), api=createApi(), video=$('camera');
-let remoteEntry=null,profile=null,calibrationGeneration=0,resetBusy=false,pendingMessage=null,uiGeneration=0,queryGeneration=0,queryBusy=false,captureUncertain=false,frameProgress=-1,lastProgressAt=0,opening=false,pendingUpload=null;
-const storedDevice=()=>{try{return localStorage.getItem('visual-memory.camera')||'';}catch{return '';}};
-function saveDevice(value){try{localStorage.setItem('visual-memory.camera',value);}catch{}}
-function status(text,error=false){$('captureStatus').textContent=text;$('captureStatus').classList.toggle('error',error);}
-function settings(){const s=video.srcObject?.getVideoTracks()[0]?.getSettings()||{};return {deviceId:s.deviceId||$('device').value,width:s.width||video.videoWidth,height:s.height||video.videoHeight};}
-function invalidate(){calibrationGeneration++;profile=null;$('calibrationBadge').textContent='NOT SET UP';}
-function applyProfile(value){if(validateCalibration(value,settings())){profile=value;$('calibrationBadge').textContent='CALIBRATED';}}
-function controls(){
-  const hasCamera=!!camera.stream;
-  $('enableCamera').disabled=opening||resetBusy;
-  $('enableCamera').textContent=opening?'Connecting…':hasCamera?'Reconnect preview':'Enable camera';
-  $('start').disabled=!hasCamera||loop.running||loop.pending||captureUncertain||opening||resetBusy;
-  $('stop').disabled=!hasCamera&&!opening;
-  $('device').disabled=opening||loop.running||resetBusy;
-  $('calibrate').disabled=resetBusy;
-  $('refreshDevices').disabled=resetBusy;
-  $('clearMemory').disabled=resetBusy;
-  $('question').disabled=resetBusy;
-  $('send').disabled=queryBusy||resetBusy;
-  $('cameraBadge').textContent=loop.running?'CAPTURING':hasCamera?'PREVIEW':remoteEntry?'SNAPSHOT':'OFFLINE';
-  $('remoteFrame').hidden=hasCamera||!remoteEntry;
-  $('cameraPlaceholder').hidden=hasCamera||!!remoteEntry;
-  $('cameraBadge').classList.toggle('active',hasCamera);
-  $('liveLabel').hidden=!hasCamera;$('liveLabel').innerHTML='';
-  if(hasCamera){const dot=document.createElement('span');dot.className='dot';$('liveLabel').append(dot,document.createTextNode(loop.running?' CAPTURING':' PREVIEW ONLY'));}
+// Laptop HUD. Owner: Jogindar (A). Live feed via GET /latest, questions via voice or typing.
+import { createApi } from './api.js';
+import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
+import { createVoice } from './voice.js';
+
+const $ = id => document.getElementById(id);
+const api = createApi({ timeoutMs: 15000 });
+const FILLERS = ['Checking the footage, sir.', 'One moment, sir. Reviewing the suit cameras.', 'Scanning your recent movements, sir.'];
+let asking = false, askToken = 0, latest = null;
+
+// ---------- live feed ----------
+function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+
+function showLatest(entry) {
+  latest = entry;
+  const path = entry && safeFrameUrl(entry.url, location.origin);
+  $('frameChip').textContent = `FRAMES ${entry ? parseInt(entry.id.replace(/\D/g, ''), 10) + 1 : 0}`;
+  $('linkChip').textContent = 'LINK OK'; $('linkChip').classList.add('ok'); $('linkChip').classList.remove('bad');
+  if (!path) {
+    $('live').hidden = true; $('idle').hidden = false;
+    $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren();
+    $('scanState').textContent = 'STANDBY'; return;
+  }
+  const src = `${path}?v=${entry.ts}`;
+  if ($('live').getAttribute('src') !== src) $('live').src = src;
+  $('live').hidden = false; $('idle').hidden = true;
+  $('age').textContent = formatSeenAt(entry.ts).toUpperCase();
+  const c = entry.caption;
+  if (!c) { $('scanState').textContent = 'ANALYZING…'; $('scanState').classList.add('busy'); return; }
+  $('scanState').textContent = 'SCANNING'; $('scanState').classList.remove('busy');
+  $('room').textContent = `ROOM ${(c.room_guess || 'unknown').toUpperCase()}`;
+  $('scene').textContent = c.scene || '';
+  $('objects').replaceChildren(
+    ...(c.objects || []).slice(0, 6).map(o => el('span', 'tag obj', o)),
+    ...(c.landmarks || []).slice(0, 4).map(l => el('span', 'tag mark', l)),
+  );
 }
-const camera=createCameraController({media:navigator.mediaDevices,attach(stream){video.srcObject=stream;$('cameraPlaceholder').hidden=!!stream;if(stream)video.play().catch(()=>{});},onEnded(){loop.stop();opening=false;uiGeneration++;invalidate();void wizard.cancel();status('Camera disconnected. Reconnect it and enable the preview again.',true);controls();}});
-const loop=createCaptureLoop({
-  async sample(){
-    if(document.hidden)return null;
-    if(Date.now()-lastProgressAt>8000){throw Error('The preview has stopped updating. Reconnect the camera before capturing again.');}
-    return captureFrame(video);
-  },
-  async upload(blob,ts){
-    status('Saving sighting…');
-    pendingUpload=api.uploadFrame(blob,ts);
-    try{return await pendingUpload;}catch(error){if(error.uncertain){captureUncertain=true;status(error.message+' Upload completion needs to be resolved before another capture session.',true);}throw error;}
-    finally{pendingUpload=null;setTimeout(controls,0);}
-  },
-  onSaved(result){$('lastSaved').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});status(result.caption===null?'Frame saved. Analyzing in the background…':/\bstub\b/i.test(result.caption.scene)?'Frame saved. Recognition is still using a placeholder.':'Sighting saved. Capturing when processing is ready.');controls();},
-  onError(error){status(error.message,true);controls();}
+
+const poller = createLatestPoller({
+  load: () => api.getLatest(),
+  onUpdate: showLatest,
+  onError() { $('linkChip').textContent = 'LINK LOST'; $('linkChip').classList.add('bad'); $('linkChip').classList.remove('ok'); },
 });
-const wizard=createCalibrationWizard({api,video,getSettings:settings,onComplete:applyProfile,onPause(){loop.stop();controls();},onInvalidate:invalidate});
-async function refreshDevices(){
-  if(!navigator.mediaDevices?.enumerateDevices){status('Camera access requires localhost or HTTPS in a supported browser.',true);return;}
-  const preferred=$('device').value||settings().deviceId||storedDevice();
-  try{
-    const devices=await listCameras();const select=$('device');select.replaceChildren();
-    const placeholder=document.createElement('option');placeholder.value='';placeholder.textContent=devices.length?'Choose a camera':'No cameras found';select.append(placeholder);
-    devices.forEach((device,index)=>{const option=document.createElement('option');option.value=device.deviceId;option.textContent=device.label||`Camera ${index+1}`;select.append(option);});
-    if(devices.some(d=>d.deviceId===preferred))select.value=preferred;
-    if(camera.stream&&!devices.some(d=>d.deviceId===settings().deviceId)){stopAll();status('The selected camera is no longer available. Choose it again after reconnecting.',true);}
-  }catch(error){status(error.message,true);}
+
+// ---------- transcript + evidence ----------
+function say(who, text) {
+  const line = el('p', `line ${who}`);
+  line.append(el('b', null, who === 'you' ? 'YOU ' : 'JARVIS '), document.createTextNode(text));
+  $('transcript').append(line);
+  $('transcript').scrollTop = $('transcript').scrollHeight;
+  return line;
 }
-async function enable(){
-  if(!navigator.mediaDevices?.getUserMedia){status('Open this app on localhost or HTTPS to enable camera access.',true);return;}
-  const token=++uiGeneration;loop.stop();invalidate();opening=true;controls();status('Waiting for camera permission…');
-  try{
-    const stream=await camera.start($('device').value);if(!stream||token!==uiGeneration)return;
-    lastProgressAt=Date.now();frameProgress=-1;await refreshDevices();if(token!==uiGeneration)return;
-    const id=settings().deviceId;if(id){$('device').value=id;saveDevice(id);}
-    status('Preview ready. Align the phone like glasses, then press Start.');
-    const profileToken=calibrationGeneration;
-    api.calibrationStatus().then(p=>{if(token===uiGeneration&&profileToken===calibrationGeneration)applyProfile(p);}).catch(()=>{});
-  }catch(error){if(token===uiGeneration){const messages={NotAllowedError:'Camera permission was denied. Allow camera access in your browser settings and retry.',NotFoundError:'No camera found. Connect your iPhone with Continuity Camera and refresh.',OverconstrainedError:'That camera is unavailable. Refresh the list and select it again.',NotReadableError:'The camera could not open. Close other camera apps and retry.'};status(messages[error.name]||error.message,true);}}
-  finally{if(token===uiGeneration){opening=false;controls();}}
+
+function showEvidence(result) {
+  const frames = (result.frames || []).filter(f => safeFrameUrl(f.url, location.origin));
+  if (!frames.length) { $('evidence').hidden = true; return; }
+  // find: first frame is the best match. retrace: ordered now -> target, so the target is last.
+  const target = result.kind === 'retrace' ? frames[frames.length - 1] : frames[0];
+  $('heroImg').src = safeFrameUrl(target.url, location.origin);
+  $('heroCap').textContent = `${target.note || ''} · ${formatSeenAt(target.ts)}`;
+  const steps = result.kind === 'retrace' ? frames : frames.slice(1);
+  $('trailTitle').hidden = !steps.length;
+  $('trail').replaceChildren(...steps.map((f, i) => {
+    const li = el('li');
+    const img = el('img'); img.src = safeFrameUrl(f.url, location.origin); img.alt = f.note || `step ${i + 1}`;
+    li.append(img, el('span', null, `${i + 1}. ${f.note || ''}`));
+    return li;
+  }));
+  $('evidence').hidden = false;
 }
-function stopAll(){uiGeneration++;opening=false;loop.stop();camera.stop();invalidate();void wizard.cancel();status('Capture stopped. Saved memories are retained.');controls();}
-$('enableCamera').onclick=enable;$('refreshDevices').onclick=refreshDevices;
-$('device').onchange=()=>{if(camera.stream)stopAll();saveDevice($('device').value);status('Camera selected. Enable the preview to connect.');};
-$('start').onclick=()=>{if(document.hidden)return;if(loop.start()){status('Capturing every 3 seconds when processing is ready.');controls();}};
-$('stop').onclick=stopAll;$('calibrate').onclick=()=>wizard.open();
-video.addEventListener('loadeddata',()=>{lastProgressAt=Date.now();});
-setInterval(()=>{
-  if(!camera.stream||document.hidden)return;
-  const progress=video.getVideoPlaybackQuality?.().totalVideoFrames??video.currentTime;
-  if(progress!==frameProgress){frameProgress=progress;lastProgressAt=Date.now();}
-  if(loop.running&&Date.now()-lastProgressAt>8000){loop.stop();invalidate();status('The camera view appears frozen. Reconnect before resuming.',true);controls();}
-  if(profile&&!validateCalibration(profile,settings()))invalidate();
-},1000);
-navigator.mediaDevices?.addEventListener?.('devicechange',refreshDevices);
-document.addEventListener('visibilitychange',()=>{if(document.hidden&&loop.running){loop.stop();invalidate();status('Capture paused while this tab is hidden. Press Start to resume.');controls();}});
-window.addEventListener('pagehide',()=>{stopAll();latestPoller.stop();});
-window.addEventListener('pageshow',event=>{if(event.persisted){latestPoller.start();void connection();}});
-function resizeInput(){$('question').style.height='auto';$('question').style.height=Math.min($('question').scrollHeight,140)+'px';}
-$('question').addEventListener('input',resizeInput);
-$('question').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('askForm').requestSubmit();}});
-document.querySelectorAll('[data-question]').forEach(button=>button.onclick=()=>{$('question').value=button.dataset.question;resizeInput();$('question').focus();});
-$('askForm').onsubmit=async event=>{
-  event.preventDefault();const question=$('question').value.trim();if(!question||queryBusy||resetBusy)return;
-  const token=++queryGeneration;queryBusy=true;$('send').disabled=true;$('welcome')?.remove();
-  addMessage($('chat'),'user',question);$('question').value='';resizeInput();
-  const message=addMessage($('chat'),'assistant','Looking through saved sightings…',{pending:true});pendingMessage=message;
-  try{
-    const result=await api.askQuestion(question);if(token!==queryGeneration)return;
-    renderAnswer(message,result,camera.stream?profile:null);$('serviceStatus').textContent=/\bstub\b/i.test(result.answer)?'Recognition placeholder':'Backend connected';
-  }catch(error){if(token===queryGeneration)message.update(error.message,true);}
-  finally{if(token===queryGeneration){queryBusy=false;pendingMessage=null;controls();$('question').focus();}}
-};
-$('clearMemory').onclick=()=>{
-  stopAll();
-  $('resetStatus').textContent=captureUncertain?'An upload may still be processing. Wait for it to finish on the backend before clearing; a browser timeout cannot cancel server work.':'';
-  $('confirmReset').disabled=captureUncertain;$('resetDialog').showModal();
-};
-$('cancelReset').onclick=()=>{if(!resetBusy)$('resetDialog').close();};
-$('resetDialog').addEventListener('cancel',event=>{if(resetBusy)event.preventDefault();});
-$('confirmReset').onclick=async()=>{
-  if(resetBusy)return;resetBusy=true;latestPoller.stop();queryGeneration++;queryBusy=false;
-  pendingMessage?.update('Request cancelled because memories are being cleared.');pendingMessage=null;controls();
-  $('confirmReset').disabled=true;$('cancelReset').disabled=true;$('resetStatus').textContent='Waiting for accepted uploads to finish…';
-  try{
-    if(pendingUpload)await pendingUpload;
-    if(captureUncertain)throw Error('Upload completion is uncertain. Resolve it on the backend before clearing.');
-    const sightings=await api.getLog();
-    if(sightings.some(entry=>entry.caption===null))throw Error('Snapshots are still being analyzed. Stop phone capture, wait for processing to finish, then retry.');
-    $('resetStatus').textContent='Clearing saved sightings…';await api.resetMemory();
-    $('chat').replaceChildren();addMessage($('chat'),'assistant','Saved memories cleared. Enable your camera and start a fresh session.');$('lastSaved').textContent='No sightings yet';showLatest(null);$('resetDialog').close();
-  }catch(error){$('resetStatus').textContent=error.message;}
-  finally{resetBusy=false;$('confirmReset').disabled=captureUncertain;$('cancelReset').disabled=false;latestPoller.start();controls();}
-};
-async function connection(){try{const log=await api.getLog();$('serviceStatus').textContent='Backend connected';const newest=log.filter(x=>typeof x.ts==='number').sort((a,b)=>b.ts-a.ts)[0];if(newest)$('lastSaved').textContent=formatSeenAt(newest.ts);}catch{$('serviceStatus').textContent='Backend not connected';}}
-function showLatest(entry){
-  const path=entry&&safeFrameUrl(entry.url,location.origin);
-  remoteEntry=path?entry:null;
-  if(remoteEntry){
-    const image=$('remoteFrame'),source=`${path}?v=${entry.ts}`;
-    if(image.getAttribute('src')!==source)image.src=source;
-    $('lastSaved').textContent=formatSeenAt(entry.ts);
-    $('analysisStatus').textContent=entry.caption===null?'Snapshot received · Analyzing…':/\bstub\b/i.test(entry.caption.scene)?'Snapshot received · Recognition placeholder':entry.caption.scene;
-  }else{$('remoteFrame').removeAttribute('src');$('analysisStatus').textContent='No remote snapshots yet.';}
-  controls();
+
+async function ask(question) {
+  question = question.trim();
+  if (!question || asking) return;
+  asking = true; const token = ++askToken;
+  say('you', question);
+  voice.speak(FILLERS[Math.floor(Math.random() * FILLERS.length)], { interrupt: true });
+  const pending = say('jarvis', 'Reviewing footage…'); pending.classList.add('pending');
+  document.body.classList.add('thinking');
+  try {
+    const result = await api.askQuestion(question);
+    if (token !== askToken) return;
+    pending.remove();
+    say('jarvis', result.answer);
+    voice.speak(result.answer);
+    showEvidence(result);
+  } catch (error) {
+    if (token !== askToken) return;
+    pending.remove();
+    const msg = "I'm afraid I've lost the connection to the suit cameras, sir.";
+    say('jarvis', msg); voice.speak(msg);
+    console.error(error);
+  } finally {
+    if (token === askToken) { asking = false; document.body.classList.remove('thinking'); }
+  }
 }
-$('remoteFrame').addEventListener('error',()=>{$('analysisStatus').textContent='The latest snapshot could not be loaded.';});
-const latestPoller=createLatestPoller({load:()=>api.getLatest(),onUpdate:showLatest,onError(){ $('analysisStatus').textContent='Remote snapshot feed unavailable.'; }});
-void refreshDevices();void connection();latestPoller.start();controls();
+
+// ---------- voice ----------
+const MIC = { listening: 'MIC LIVE · SAY "JARVIS"', armed: 'LISTENING…', ptt: 'PUSH-TO-TALK', denied: 'MIC BLOCKED', unsupported: 'NO VOICE · TYPE', off: 'MIC OFF' };
+const voice = createVoice({
+  onQuestion: ask,
+  onState: s => { $('micChip').textContent = MIC[s] || s; $('micChip').classList.toggle('ok', s === 'listening' || s === 'armed' || s === 'ptt'); $('micChip').classList.toggle('hot', s === 'armed' || s === 'ptt'); },
+  onHeard: (text, interim) => { $('heard').textContent = interim ? `… ${text}` : ''; },
+});
+
+// Chrome needs a user gesture before audio/mic: start on the first click or key press.
+let started = false;
+function boot() { if (started) return; started = true; voice.start(); voice.speak('Good evening, sir. Suit cameras online.'); }
+document.addEventListener('click', boot);
+
+// ---------- keys + typed fallback ----------
+const typing = () => document.activeElement === $('q');
+document.addEventListener('keydown', async e => {
+  if (typing()) return;
+  boot();
+  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) voice.pushToTalk(true); }
+  if (e.key === 'r' || e.key === 'R') {
+    try {
+      await api.resetMemory();
+      askToken++; asking = false; document.body.classList.remove('thinking');
+      $('transcript').replaceChildren(); $('evidence').hidden = true; showLatest(null);
+      toast('MEMORY CLEARED');
+    } catch (err) { toast('RESET FAILED'); console.error(err); }
+  }
+  if (e.key === 'Escape') $('evidence').hidden = true;
+});
+document.addEventListener('keyup', e => { if (!typing() && e.code === 'Space') voice.pushToTalk(false); });
+$('askForm').onsubmit = e => { e.preventDefault(); boot(); const q = $('q').value; $('q').value = ''; $('q').blur(); ask(q); };
+
+function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }
+
+poller.start();
+if (!voice.supported) $('micChip').textContent = MIC.unsupported;

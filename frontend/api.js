@@ -4,7 +4,7 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
     try {
       const response=await fetchImpl(path,{...init,signal:controller.signal});
       if(!response.ok) {
-        const error=Error(response.status===404&&path.startsWith('/calibration')?'Calibration service is not connected yet.':`Service returned ${response.status}. Please try again.`);
+        const error=Error(`Service returned ${response.status}. Please try again.`);
         error.status=response.status; throw error;
       }
       let data; try {data=await response.json();} catch {throw Error('The service returned an unreadable response.');}
@@ -22,11 +22,6 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
     askQuestion(question) {return json('/ask',{question},x=>typeof x?.answer==='string'&&['find','retrace','other'].includes(x.kind)&&Array.isArray(x.frames));},
     getLog:()=>request('/log',{},Array.isArray),
     getLatest:()=>request('/latest',{},x=>x===null||(typeof x?.id==='string'&&typeof x.url==='string'&&Number.isFinite(x.ts)&&(x.caption===null||typeof x.caption?.scene==='string'))),
-    resetMemory:()=>json('/reset',{},x=>x?.ok===true),
-    calibrationStatus:()=>request('/calibration/status'),
-    startCalibration:body=>json('/calibration/start',body),
-    calibrationFrame(id,blob,ts) {const body=new FormData();body.append('image',blob,'calibration.jpg');body.append('ts',String(ts));return request(`/calibration/${encodeURIComponent(id)}/frame`,{method:'POST',body});},
-    finishCalibration:(id,body)=>json(`/calibration/${encodeURIComponent(id)}/finish`,body),
-    cancelCalibration:id=>json(`/calibration/${encodeURIComponent(id)}/cancel`,{})
+    resetMemory:()=>json('/reset',{},x=>x?.ok===true)
   };
 }

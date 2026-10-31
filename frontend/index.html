@@ -4,74 +4,72 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <meta name="color-scheme" content="dark">
-  <title>Visual memory · Workspace</title>
-  <link rel="stylesheet" href="style.css">
+  <title>J.A.R.V.I.S.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hud.css">
 </head>
 <body>
-  <svg class="svg-library" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs>
-    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 3 2.5 6.5L21 12l-6.5 2.5L12 21l-2.5-6.5L3 12l6.5-2.5Z"/></symbol>
-    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M12 19V5m-6 6 6-6 6 6"/></symbol>
-    <symbol id="i-camera" viewBox="0 0 24 24"><path d="M8 6 9.5 4h5L16 6h4v14H4V6Z"/><circle cx="12" cy="12.5" r="3.5"/></symbol>
-    <symbol id="i-target" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2"/><path d="M12 2v3m0 14v3M2 12h3m14 0h3"/></symbol>
-    <symbol id="i-chevron" viewBox="0 0 24 24"><path d="m9 5 7 7-7 7"/></symbol>
-    <symbol id="i-tool" viewBox="0 0 24 24"><path d="m14 7 3 3 5-5a7 7 0 0 1-9 9l-7 7-3-3 7-7a7 7 0 0 1 9-9Z"/></symbol>
-    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
-    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 7v5h-5M4 17v-5h5M6 7a7 7 0 0 1 12-1l2 3M4 15l2 3a7 7 0 0 0 12-1"/></symbol>
-  </defs></svg>
-  <header class="topbar">
-    <a class="brand" href="/" aria-label="Visual memory home"><span class="brand-mark"><svg><use href="#i-spark"/></svg></span><span>visual memory<span class="brand-separator">/</span><span class="brand-sub">workspace</span></span></a>
-    <div class="topbar-right"><span class="local-label"><span class="dot"></span> LAPTOP SESSION</span><span class="version">PROTOTYPE / 01</span></div>
+  <!-- Owner: Jogindar (A). Laptop HUD shown on the projector. See CLAUDE.md. -->
+  <header class="top">
+    <div class="brand"><span class="arc"></span>J.A.R.V.I.S.<span class="sub">MARK I · LOST &amp; FOUND PROTOCOL</span></div>
+    <div class="chips">
+      <span id="linkChip" class="chip">LINK ···</span>
+      <span id="frameChip" class="chip">FRAMES 0</span>
+      <span id="micChip" class="chip">MIC OFF</span>
+    </div>
   </header>
-  <main class="workspace">
-    <section class="chat-panel" aria-label="Assistant conversation">
-      <div class="section-heading"><div><span class="eyebrow">YOUR SECOND PAIR OF EYES</span><h1>Workshop assistant<span class="heading-dot">.</span></h1></div><span class="text-badge">TEXT ONLY</span></div>
-      <div id="chat" class="chat-scroll" role="log" aria-label="Chat messages" aria-live="polite" aria-relevant="additions">
-        <div id="welcome" class="welcome">
-          <div class="welcome-symbol"><svg><use href="#i-spark"/></svg></div>
-          <span class="eyebrow">LESS SEARCHING. MORE MAKING.</span>
-          <h2>Keep your head<br>in the project.</h2>
-          <p>A memory for the things you put down.<br>Connect your camera, set up your space, and ask away.</p>
-          <div class="suggestions" aria-label="Suggested questions">
-            <button class="suggestion" data-question="Where is my screwdriver?"><svg><use href="#i-tool"/></svg><span>Find my screwdriver</span><svg class="small"><use href="#i-chevron"/></svg></button>
-            <button class="suggestion" data-question="Where did I leave my keys?"><svg><use href="#i-clock"/></svg><span>Where did I leave my keys?</span><svg class="small"><use href="#i-chevron"/></svg></button>
-          </div>
+
+  <main class="hud">
+    <section class="feed" aria-label="Live view from the suit camera">
+      <div class="viewport">
+        <img id="live" alt="Latest frame from the phone" hidden>
+        <div id="idle" class="idle">
+          <div class="reticle"></div>
+          <p>AWAITING VISUAL FEED</p>
+          <p class="hint">Open the capture page on the iPhone and press Start.</p>
+        </div>
+        <span class="bracket tl"></span><span class="bracket tr"></span>
+        <span class="bracket bl"></span><span class="bracket br"></span>
+        <div class="scanline"></div>
+        <div class="overlay-top">
+          <span id="room" class="tag room">ROOM —</span>
+          <span id="age" class="tag">—</span>
+        </div>
+        <div id="scanState" class="scan-state">SCANNING</div>
+        <div class="overlay-bottom">
+          <div id="scene" class="scene"></div>
+          <div id="objects" class="labels"></div>
         </div>
       </div>
-      <div class="composer-wrap">
-        <form id="askForm" class="composer">
-          <label class="sr-only" for="question">Ask about an object</label>
-          <textarea id="question" rows="1" maxlength="1000" placeholder="Where did I put…" required></textarea>
-          <button id="send" class="send-button" type="submit" aria-label="Send message" title="Send message"><svg><use href="#i-arrow"/></svg></button>
-        </form>
-        <div class="composer-foot"><span><kbd>↵</kbd> to send <span class="muted">· Shift + Enter for a new line</span></span><span>Directions follow your glasses’ view</span></div>
-      </div>
     </section>
-    <aside class="side-panel" aria-label="Camera and workspace setup">
-      <div class="side-title"><span class="eyebrow">YOUR VIEW</span><span id="cameraBadge" class="state-badge">OFFLINE</span></div>
-      <div id="preview" class="preview">
-        <img id="remoteFrame" class="remote-frame" alt="Latest snapshot received from the phone" hidden>
-        <video id="camera" autoplay playsinline muted aria-label="Live selected camera preview"></video>
-        <div id="cameraPlaceholder" class="camera-placeholder"><div class="camera-orbit"><svg><use href="#i-camera"/></svg></div><strong>Your eyes, remembered.</strong><span>Connect a camera to get started</span></div>
-        <span id="liveLabel" class="live-label" hidden><span class="dot"></span> PREVIEW ONLY</span>
-        <span class="preview-corner tl"></span><span class="preview-corner br"></span>
+
+    <section class="jarvis" aria-label="Jarvis">
+      <div class="panel-title">COMMS</div>
+      <div id="transcript" class="transcript" aria-live="polite">
+        <p class="line sys">Say <b>"Jarvis, where did I leave my helmet?"</b><br>
+          Hold <kbd>Space</kbd> to talk without the wake word. <kbd>R</kbd> clears memory.</p>
       </div>
-      <p id="analysisStatus" class="feed-status" role="status">No remote snapshots yet.</p><a class="capture-page-link" href="capture.html">Open phone capture page ↗</a>
-      <div class="device-section"><label for="device">CAMERA SOURCE</label><div class="device-row"><select id="device"><option value="">Choose a camera</option></select><button id="refreshDevices" class="icon-button" type="button" aria-label="Refresh cameras" title="Refresh cameras"><svg><use href="#i-refresh"/></svg></button></div><button id="enableCamera" class="button secondary full" type="button"><svg><use href="#i-camera"/></svg>Enable camera</button></div>
-      <div class="capture-controls"><button id="start" class="button primary" type="button" disabled><span class="play-triangle"></span>Start</button><button id="stop" class="button secondary" type="button" disabled><span class="stop-square"></span>Stop</button></div>
-      <div id="captureStatus" class="status-line" role="status">Camera off. Nothing is being captured.</div>
-      <section class="calibration-card" aria-label="Location setup"><div class="card-top"><div class="card-icon"><svg><use href="#i-target"/></svg></div><span id="calibrationBadge" class="mini-badge">NOT SET UP</span></div><h2>Give your space a reference.</h2><p>A quick guided setup grounds angle and distance in your workshop.</p><button id="calibrate" class="text-button" type="button">Set up calibration <svg><use href="#i-chevron"/></svg></button></section>
-      <div class="session-details"><div><span>Capture interval</span><strong>Every 3 seconds*</strong></div><div><span>Reference</span><strong>Glasses facing</strong></div><div><span>Last saved</span><strong id="lastSaved">No sightings yet</strong></div></div>
-      <p class="fine-print">*When processing is ready. Capture starts only when you press Start. Images are sent to the configured backend, which may use an external AI service.</p>
-      <div class="side-footer"><span class="dot"></span><span id="serviceStatus">Checking connection…</span><button id="clearMemory" type="button">Clear memory</button></div>
-    </aside>
+      <div id="heard" class="heard"></div>
+
+      <div id="evidence" class="evidence" hidden>
+        <div class="panel-title">LAST SEEN</div>
+        <figure class="hero">
+          <img id="heroImg" alt="Where Jarvis last saw it">
+          <figcaption id="heroCap"></figcaption>
+        </figure>
+        <div class="panel-title" id="trailTitle" hidden>ROUTE BACK</div>
+        <ol id="trail" class="trail"></ol>
+      </div>
+
+      <form id="askForm" class="ask">
+        <input id="q" placeholder="Type to Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
+        <button>SEND</button>
+      </form>
+    </section>
   </main>
-  <dialog id="calibrationDialog" class="setup-dialog" aria-labelledby="setupTitle"><div class="dialog-header"><span class="eyebrow">WORKSPACE SETUP</span><button id="closeSetup" class="icon-button" aria-label="Close calibration" type="button">×</button></div><h2 id="setupTitle">Make your space measurable.</h2><p class="dialog-intro">A measured reference gives your camera a sense of scale. Directions follow where your glasses are pointing.</p><ol class="setup-steps"><li id="setupStep1" class="active"><span>01</span>Reference</li><li id="setupStep2"><span>02</span>Scan</li><li id="setupStep3"><span>03</span>Check</li></ol>
-    <section id="setupReference"><h3>Place a measured reference</h3><p>Use the marker board supplied by the calibration service. Fix it to a stationary background surface and measure the printed marker edge.</p><a id="markerDownload" class="text-button" hidden download>Download reference board ↗</a><label class="field-label" for="markerSize">Printed marker edge (centimetres)</label><input id="markerSize" type="number" min="1" max="500" step="0.1" value="10"><p class="field-help">Measure the actual print, not the paper. Keep the same lens, resolution and crop throughout.</p></section>
-    <section id="setupScan" hidden><h3>Move sideways. Keep the reference in view.</h3><p id="scanInstruction">Slowly translate the camera, then hold still. Turning in place is not enough. The service will check the camera profile and ask for more views if needed.</p><progress id="scanProgress" value="0" max="12" aria-label="Calibration frames submitted"></progress><span id="scanCount" class="field-help">Waiting to scan</span></section>
-    <section id="setupCheck" hidden><h3>Check against a second measurement</h3><p>Place the second known-size marker from the reference board set at an independent checkpoint in your working area. Keep it in view and enter its measured printed edge.</p><label class="field-label" for="checkSize">Second marker edge (centimetres)</label><input id="checkSize" type="number" min="1" max="500" step="0.1" value="10"><p id="validationSummary" class="field-help">Only a service-validated check can enable metric directions.</p></section>
-    <p id="setupStatus" class="setup-status" role="status">Enable your camera before starting setup.</p><div class="dialog-actions"><button id="cancelSetup" class="button secondary" type="button">Cancel</button><button id="setupNext" class="button primary" type="button">Check setup service</button></div>
-  </dialog>
-  <dialog id="resetDialog" class="setup-dialog compact-dialog" aria-labelledby="resetTitle"><span class="eyebrow">START FRESH</span><h2 id="resetTitle">Clear saved memories?</h2><p>Stop any phone capture first. This stops local capture and asks the backend to delete saved sightings and photos once analysis is finished. Your chat clears only after success.</p><p id="resetStatus" class="setup-status" role="status"></p><div class="dialog-actions"><button id="cancelReset" class="button secondary" type="button">Keep memories</button><button id="confirmReset" class="button danger" type="button">Clear memory</button></div></dialog>
+
+  <div id="toast" class="toast" hidden></div>
   <script type="module" src="app.js"></script>
 </body>
 </html>

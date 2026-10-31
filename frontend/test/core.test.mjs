@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { createCameraController } from '../camera.js';
-import { createCaptureLoop, formatDirection, validateCalibration, formatSeenAt } from '../core.js';
+import { createCaptureLoop, formatSeenAt } from '../core.js';
 import { createApi } from '../api.js';
 const deferred = () => { let resolve; const promise = new Promise(r => resolve=r); return {promise, resolve}; };
 const stream = () => ({ stopped: false, getTracks() { return [{stop: () => {this.stopped=true;}, addEventListener() {}}]; } });
@@ -28,17 +28,6 @@ test('capture errors stop automatic retries', async () => {
   let failures=0;
   const loop=createCaptureLoop({sample:async()=>({blob:new Blob(),ts:1}),upload:async()=>{throw Error('offline');},onSaved:()=>{},onError:()=>failures++,schedule:()=>1,cancel:()=>{}});
   loop.start(); await new Promise(r=>setTimeout(r,0)); assert.equal(loop.running,false); assert.equal(failures,1);
-});
-const profile={status:'ready',valid:true,calibration_id:'c1',map_id:'m1',camera_id:'iphone',width:640,height:480};
-const direction={status:'located',valid:true,reference:'glasses',bearing_deg:30,horizontal_distance_m:5,query_pose_ts:10000,calibration_id:'c1',map_id:'m1',historical:true,last_seen_ts:5000,bearing_error_deg:5,distance_error_m:.5};
-test('only fresh compatible calibrated geometry becomes a direction',()=>{
-  assert.equal(formatDirection(direction,profile,10000),'About 30° left, roughly 5 metres away.');
-  for(const patch of [{valid:false},{bearing_deg:NaN},{query_pose_ts:8000},{reference:'camera'},{map_id:'wrong'},{horizontal_distance_m:-1},{bearing_error_deg:40},{last_seen_ts:null}]) assert.equal(formatDirection({...direction,...patch},profile,10000),null);
-  assert.equal(formatDirection({...direction,bearing_deg:-30},profile,10000),'About 30° right, roughly 5 metres away.');
-});
-test('calibration cannot be unlocked by incomplete or incompatible status',()=>{
- assert.equal(validateCalibration(profile,{deviceId:'iphone',width:640,height:480}),true);
- for(const patch of [{valid:false},{status:'scanning'},{camera_id:'other'},{width:1280}]) assert.equal(validateCalibration({...profile,...patch},{deviceId:'iphone',width:640,height:480}),false);
 });
 test('unknown and future times never look recent',()=>{
  assert.equal(formatSeenAt(null,10000),'Time unavailable'); assert.equal(formatSeenAt(20000,10000),'Time unavailable'); assert.equal(formatSeenAt(5000,10000),'5 seconds ago');
