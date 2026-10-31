@@ -11,6 +11,7 @@ from pydantic import BaseModel
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import ai  # noqa: E402
+import answer  # noqa: E402
 import store  # noqa: E402
 
 log = logging.getLogger("uvicorn.error")
@@ -46,7 +47,7 @@ class Ask(BaseModel):
 @app.post("/ask")
 def ask(body: Ask):
     captioned = [e for e in store.read_log() if e["caption"]]
-    return ai.answer(body.question, captioned)
+    return answer.answer(body.question, captioned)
 
 
 @app.get("/latest")
