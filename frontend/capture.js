@@ -53,14 +53,16 @@ const voiceStates={ready:'Ready. Tap Talk for your next question.',listening:'Li
 const OUTPUT_KEY='jarvisOutput';
 try{const saved=localStorage.getItem(OUTPUT_KEY);if(saved)$('phoneOutput').value=saved;}catch{}
 $('phoneOutput').onchange=()=>{try{localStorage.setItem(OUTPUT_KEY,$('phoneOutput').value);}catch{}};
-const onLaptop=()=>$('phoneOutput').value==='laptop';
+const output=()=>$('phoneOutput').value;                       // 'phone' | 'laptop' | 'both'
+const onLaptop=()=>output()==='laptop';                          // laptop only: the phone stays silent
 const replySpeaker={unlock:()=>speaker.unlock(),stop:()=>speaker.stop(),play:text=>onLaptop()?Promise.resolve():speaker.play(text)};
 const phoneVoice=createPhoneConversation({
  Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- speaker:replySpeaker,ask:question=>questionApi.askQuestion(question,{speak_on:onLaptop()?'laptop':'phone'}),
+ speaker:replySpeaker,ask:question=>questionApi.askQuestion(question,{speak_on:output()}),
  onState(state){
    if(!(state==='ready'&&playbackBlocked))$('phoneVoiceStatus').textContent=voiceStates[state]||state;
    if(state==='speaking'&&onLaptop())$('phoneVoiceStatus').textContent='Jarvis is replying on the laptop.';
+   if(state==='speaking'&&output()==='both')$('phoneVoiceStatus').textContent='Jarvis is replying here and on the laptop.';
    if(['ready','no-speech','recognition-error','error'].includes(state))resumeHandsFree();
    $('phoneTalk').textContent=state==='listening'?'Finish speaking':'Talk to Jarvis';
    const busy=state==='thinking'||state==='speaking';$('phoneTalk').disabled=busy;$('phoneAskForm').querySelector('button').disabled=busy;$('phoneReplay').disabled=busy;

@@ -56,6 +56,8 @@ def test_phone_choice_of_speaker_is_relayed_to_the_hud(monkeypatch):
     main.reset()
     asyncio.run(main.ask(main.Ask(question='Where is my helmet?', speak_on='laptop')))
     assert main.interaction()['speak_on'] == 'laptop'
+    asyncio.run(main.ask(main.Ask(question='Where is my wallet?', speak_on='both')))
+    assert main.interaction()['speak_on'] == 'both'
     asyncio.run(main.ask(main.Ask(question='Where are my keys?')))
     assert main.interaction()['speak_on'] == 'phone'      # default: the phone speaks, the HUD stays silent
     main.reset()
