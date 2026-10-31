@@ -18,7 +18,8 @@ Read `API.md` for the frontend/backend contract and `README.md` for setup.
 |---|---|---|
 | Jogindar | A — frontend (laptop HUD + phone capture page) | `frontend/**` |
 | Vince | B — backend, tunnel, demo server | `backend/main.py`, `backend/store.py`, `backend/requirements.txt`, `scripts/**` |
-| Kenny | C — AI: captions, answers, Jarvis's personality, demo script | `backend/ai.py`, `prompts/**`, `samples/**` |
+| Kenny | C — AI eyes: per-frame captions, demo-route photos | `backend/ai.py`, `prompts/caption.md`, `samples/**` |
+| Paul | D — AI brain and voice: answers, Jarvis's personality, answer tests, stretch commentary; pitch, Devpost and backup video from 1:30 | `backend/answer.py`, `prompts/answer.md`, `tests/**` |
 
 - Only edit files you own. If you need a change elsewhere, stop and tell your
   human so they can ask the owner.
@@ -32,9 +33,9 @@ Read `API.md` for the frontend/backend contract and `README.md` for setup.
 ┌──────────────┐  POST /frame   ┌──────────────────────────────────┐
 │ capture.html │── cloudflared ▶│ FastAPI (backend/main.py)        │
 │ photo / 3s   │    (HTTPS)     │  ├ store.py → data/frames, log   │
-└──────────────┘                │  └ ai.py → Claude (background)   │
-                                │     ├ Haiku: caption each frame  │
- scripts/replay.py ─POST /frame▶│     └ Sonnet: answer questions   │
+└──────────────┘                │  ├ ai.py → Haiku captions (bg)   │
+                                │  └ answer.py → Sonnet answers    │
+ scripts/replay.py ─POST /frame▶│                                  │
  (fake walk from samples/)      │                                  │
                                 │ Chrome: localhost:8000 (HUD) ◀───┼── GET /latest every 1s
                                 │  mic → "Jarvis, …" → POST /ask   │──▶ mirrored to
@@ -53,6 +54,11 @@ photos of the demo route, in walking order (`01.jpg`…), and
 - **Kenny (AI):** tune the prompts by captioning `samples/` directly (write a
   small script that calls `ai.caption_frame` on each file and prints the JSON).
   You don't need the HUD or the server. Keep `ai.py`'s function signatures and return shapes.
+- **Paul (AI):** tune answers without waiting for real captions. Hand-write a
+  fake captioned log (`tests/fake_log.json`, ~15 entries of a walk with the
+  helmet left on a chair) and a test script that asks 5–10 questions through
+  `answer.answer()` and prints the replies. Later, rerun it on Kenny's real
+  captions of `samples/`. Keep `answer()`'s signature and the `/ask` shape in `API.md`.
 - **Vince (backend):** the real endpoints, the cloudflared tunnel, and the iPhone
   capture flow. You don't need finished prompts or the HUD.
 - **Integration is just merging to `main`.** At 12:30, everything runs on Vince's laptop.
@@ -105,9 +111,9 @@ photos of the demo route, in walking order (`01.jpg`…), and
 |---|---|
 | 10:15 | Skeleton updated and pushed. Everyone clones, creates `.env`, and branches |
 | 10:30 | Kenny has committed `samples/` (photos of the demo route) |
-| 11:30 | Real captions (Kenny). HUD with live feed (Jogindar). The tunnel and the iPhone capture page working (Vince) |
+| 11:30 | Real captions (Kenny). Real answers on the fake log (Paul). HUD with live feed (Jogindar). The tunnel and the iPhone capture page working (Vince) |
 | 12:30 | **Full end-to-end test**: walk, "Jarvis, …", answer with photo and voice. Anything not working is cut |
-| 1:30 | Tune prompts on photos from the real demo route. HUD polish. Stretch goal only if everything works |
+| 1:30 | Tune prompts on photos from the real demo route. HUD polish. Paul switches to pitch, Devpost and backup video. Stretch goal only if everything works |
 | 2:15 | **Code freeze.** 2–3 full rehearsals. Record a backup video |
 | 3:00 | Present |
 
@@ -123,7 +129,7 @@ photos of the demo route, in walking order (`01.jpg`…), and
 ## Still undecided
 
 - Project/submission name. Candidates: "Jarvis, Where's My Helmet?", "J.A.R.V.I.S. Lost & Found Protocol".
-- `prompts/` still uses the old ghost persona. Kenny rewrites the prompts as Jarvis.
+- `prompts/` still uses the old ghost persona. Kenny rewrites `caption.md`, Paul rewrites `answer.md` as Jarvis.
 - `frontend/index.html` is currently the capture page. Jogindar moves it to
   `capture.html` and makes `index.html` the HUD.
 - Is there a better mic than the laptop's built-in one (wired earbuds with a mic)?
