@@ -34,8 +34,8 @@ jobs:
       - name: Pick test photos
         id: photos
         run: |
-          if ls samples/*.jpg samples/*.jpeg samples/*.png >/dev/null 2>&1; then
-            echo "folder=samples" >> "$GITHUB_OUTPUT"
+          if find samples -maxdepth 2 -type f \( -iname "*.jpg" -o -iname "*.jpeg" -o -iname "*.png" \) | grep -q .; then
+            echo "folder=samples" >> "$GITHUB_OUTPUT"   # smoke.py picks the first scenario folder
           else
             echo "::warning::samples/ has no photos yet; using placeholder frames (checks the contract only)"
             mkdir -p /tmp/placeholder
