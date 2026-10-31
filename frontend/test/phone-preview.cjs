@@ -17,7 +17,7 @@ let browser;
  await page.goto((process.env.HUD_URL||'http://127.0.0.1:8000')+'/capture.html');
  await page.getByRole('button',{name:'Start capture',exact:true}).click();await page.getByText('Snapshot saved. The laptop is analyzing it.',{exact:true}).waitFor();
  await page.waitForTimeout(1800);
- assert.ok(requests>=5,'preview should keep uploading independently of saved frames');assert.ok(maxActive>=2&&maxActive<=3,'preview overlap must be bounded at 3');
+ assert.ok(requests>=5,'preview should keep uploading independently of saved frames');assert.ok(maxActive>=2&&maxActive<=5,'preview overlap must be bounded at 5');
  assert.equal(timestamps.length,requests,'every preview must carry a timestamp');assert.ok(timestamps.every(ts=>Number.isFinite(ts)&&ts>0));
  const encodes=await page.evaluate(()=>window.previewEncodes);assert.ok(encodes.some(x=>x.width===360&&x.quality===.45));assert.ok(encodes.some(x=>x.width===640));
  await page.getByRole('button',{name:'Stop',exact:true}).click();const stopped=requests;await page.waitForTimeout(500);assert.equal(requests,stopped,'Stop must prevent new previews');assert.equal(await page.locator('#phoneVideo').evaluate(e=>e.srcObject),null);

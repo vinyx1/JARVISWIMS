@@ -964,3 +964,21 @@ progress {
   .phone-panel .button { min-height:44px; }
   .phone-info { margin-top:7px; }
 }
+
+.phone-voice-controls { margin-top:16px; padding-top:14px; border-top:1px solid #acd5e533; }
+.phone-voice-controls h2 { margin:0; font-size:15px; color:#edf8ff; font-weight:500; }
+.phone-voice-controls p { font-size:12px; line-height:1.5; margin:8px 0; color:#c8dce6; overflow-wrap:anywhere; }
+.phone-talk-actions,.phone-ask { display:flex; gap:8px; }
+.phone-talk-actions .button { min-height:44px; font-size:12px; padding:10px; }
+.phone-ask { margin-top:10px; }
+.phone-ask input { min-width:0; width:100%; background:#122531; color:#eef8ff; border:1px solid #9cbfce55; border-radius:10px; padding:10px; font-size:16px; }
+.phone-ask .button { min-height:44px; padding:10px 14px; font-size:12px; flex:0; }
+.phone-voice-controls .phone-answer { color:#f6dfaf; max-height:90px; overflow:auto; }
+.phone-voice-controls .phone-heard:empty,.phone-voice-controls .phone-answer:empty { display:none; }
+.phone-voice-controls #phoneReplay { min-height:40px; font-size:12px; padding:8px 12px; }
+@media (orientation:landscape) and (max-height:600px) {
+  .phone-panel { width:min(660px,calc(100% - 28px - env(safe-area-inset-left) - env(safe-area-inset-right))); max-width:660px; display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:0 18px; }
+  .phone-panel-heading,.phone-info { grid-column:1/-1; }
+  .phone-voice-controls { margin:10px 0 0; padding:0 0 0 16px; border-top:0; border-left:1px solid #acd5e533; }
+  .phone-camera-controls { margin-top:4px; }
+}

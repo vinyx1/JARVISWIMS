@@ -7,11 +7,13 @@ import re
 import shutil
 import subprocess
 import tempfile
+import threading
 import time
+import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, File, Form, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -152,8 +154,7 @@ async def _add_boxes(result: dict) -> dict:
     return result
 
 
-@app.post("/ask")
-async def ask(body: Ask):
+async def _answer_request(body: Ask):
     """Never leave Jarvis silent on stage: time out or fail into an in-character reply."""
     try:
         item = remember_item(body.question)
@@ -171,6 +172,35 @@ async def ask(body: Ask):
     except Exception:
         log.exception("/ask failed: %r", body.question)
         return {"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}
+
+
+# One active demo: retain only the latest completed exchange for the display HUD.
+_exchange = None
+_exchange_generation = 0
+_ask_inflight = 0
+_interaction_lock = threading.Lock()
+
+
+@app.post("/ask")
+async def ask(body: Ask):
+    global _exchange, _ask_inflight
+    with _interaction_lock:
+        generation = _exchange_generation
+        _ask_inflight += 1
+    try:
+        result = await _answer_request(body)
+        with _interaction_lock:
+            if generation == _exchange_generation:
+                _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result}
+        return result
+    finally:
+        with _interaction_lock:
+            _ask_inflight -= 1
+
+
+@app.get("/interaction")
+def interaction():
+    return _exchange
 
 
 class Speak(BaseModel):
@@ -256,8 +286,14 @@ def full_log():
 
 @app.post("/reset")
 def reset():
-    store.reset()
-    _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
+    global _exchange, _exchange_generation
+    with _interaction_lock:
+        if _ask_inflight:
+            raise HTTPException(status_code=409, detail="Wait for the active question before resetting memory.")
+        _exchange_generation += 1
+        _exchange = None
+        store.reset()
+        _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
     return {"ok": True}
 
 

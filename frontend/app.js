@@ -1,16 +1,13 @@
 // Laptop HUD. Owner: Jogindar (A); glass redesign by Paul. Live feed via GET /latest + /preview.jpg,
-// questions via voice (or / to type). Jarvis answers out loud; text shows only as subtitles (T).
+// Phone owns input and speech; this page displays completed exchanges and evidence.
 import { createApi } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
-import { createVoice } from './voice.js';
 import { createObjectOverlay } from './overlay.js';
 
 const $ = id => document.getElementById(id);
 const api = createApi({ timeoutMs: 15000 });
 const objectOverlay = createObjectOverlay($('heroImg'), $('objectOutline'));
-const FILLERS = ['One moment, sir. Rewinding the footage.', 'Let me have a look, sir.', 'Consulting the suit cameras, sir.'];
-const LOST_LINK = "I'm afraid I've lost the suit cameras, sir. Do bear with me.";
-let asking = false, askToken = 0, latest = null, resetting = false;
+let latest = null, resetting = false;
 let rememberedItems = [], mineGeneration = 0, activeEvidence = null;
 
 // ---------- live feed ----------
@@ -167,89 +164,33 @@ function showEvidence(result) {
   if (result.kind === 'remember') void refreshMine();
 }
 
-async function ask(question) {
-  question = question.trim();
-  if (!question || asking || resetting) return;
-  asking = true; const token = ++askToken; hideEvidence();
-  say('you', question);
-  voice.speak(FILLERS[Math.floor(Math.random() * FILLERS.length)], { interrupt: true });
-  const pending = say('jarvis', 'Reviewing footage…'); pending.classList.add('pending');
-  document.body.classList.add('thinking');
-  try {
-    const result = await api.askQuestion(question);
-    if (token !== askToken) return;
-    pending.remove();
-    say('jarvis', result.answer);
-    voice.speak(result.answer);
-    showEvidence(result);
-  } catch (error) {
-    if (token !== askToken) return;
-    pending.remove();
-    const msg = LOST_LINK;
-    say('jarvis', msg); voice.speak(msg);
-    console.error(error);
-  } finally {
-    if (token === askToken) { asking = false; document.body.classList.remove('thinking'); }
-  }
-}
-
-// ---------- voice ----------
-let earTimer = null;   // clears the 'what the mic heard' line
-const MIC = { listening: 'MIC LIVE · SAY "JARVIS"', armed: 'LISTENING…', ptt: 'PUSH-TO-TALK', denied: 'MIC BLOCKED', unsupported: 'NO VOICE · TYPE', off: 'MIC OFF' };
-const voice = createVoice({
-  onQuestion: ask,
-  onState: s => {
-    $('micChip').textContent = MIC[s] || s;
-    $('micChip').classList.toggle('ok', s === 'listening' || s === 'armed' || s === 'ptt');
-    $('micChip').classList.toggle('hot', s === 'armed' || s === 'ptt');
-    document.body.classList.toggle('listening', s === 'armed' || s === 'ptt');
+// ---------- phone exchanges: display only, never open the HUD microphone ----------
+let interactionId=null;
+const interactions=createLatestPoller({
+  load:()=>api.getInteraction(),
+  onUpdate(exchange){
+    if(!exchange){interactionId=null;hideEvidence();return;}
+    if(exchange.id===interactionId)return;
+    interactionId=exchange.id;
+    say('you',exchange.question);say('jarvis',exchange.result.answer);
+    showEvidence(exchange.result);
   },
-  onHeard: (text, interim) => {
-    $('heard').textContent = interim ? `… ${text}` : '';
-    $('ear').textContent = `“${text}”`; clearTimeout(earTimer); earTimer = setTimeout(() => ($('ear').textContent = ''), 2500);
-  },
-  onLevel: level => document.documentElement.style.setProperty('--level', level.toFixed(3)),
+  onError(){ /* Camera status remains independent; a later poll can recover. */ }
 });
-
-// Chrome needs a user gesture before audio/mic: start on the first click or key press.
-let started = false;
-const GREETING = 'Good evening, sir. All systems online, and at your service.';
-function boot() {
-  if (started || resetting) return;
-  started = true; document.body.classList.remove('booting');
-  voice.preload([GREETING, 'Sir?', ...FILLERS, LOST_LINK]);   // greeting first: it is spoken right away
-  voice.start(); voice.speak(GREETING);
-}
-document.addEventListener('click', boot);
-
-// ---------- keys + typed fallback ----------
-// Space hold-to-talk · / type a question · T subtitles · R reset · Esc close
-const typing = () => document.activeElement === $('q');
-function openAsk() { $('askForm').hidden = false; $('q').focus(); }
-function closeAsk() { $('q').blur(); $('askForm').hidden = true; }
-document.addEventListener('keydown', async e => {
-  if (typing()) { if (e.key === 'Escape') closeAsk(); return; }
-  if (resetting) return;
-  boot();
-  const plain = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey;
-  if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) voice.pushToTalk(true); }
-  if (e.key === '/' && plain) { e.preventDefault(); openAsk(); }
-  if ((e.key === 't' || e.key === 'T') && plain) {
-    const on = document.body.classList.toggle('subs-on');
-    toast(on ? 'SUBTITLES ON' : 'SUBTITLES OFF');
-  }
-  if ((e.key === 'r' || e.key === 'R') && plain) await reset();
-  if (e.key === 'Escape') { $('evidence').hidden = true; closeAsk(); }
+$('micChip').textContent='VOICE ON PHONE';
+document.body.classList.remove('booting');
+document.addEventListener('keydown',async e=>{
+  if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable||resetting)return;
+  const plain=!e.repeat&&!e.metaKey&&!e.ctrlKey&&!e.altKey;
+  if((e.key==='t'||e.key==='T')&&plain){const on=document.body.classList.toggle('subs-on');toast(on?'SUBTITLES ON':'SUBTITLES OFF');}
+  if((e.key==='r'||e.key==='R')&&plain)await reset();
+  if(e.key==='Escape')$('evidence').hidden=true;
 });
-document.addEventListener('keyup', e => { if (!typing() && e.code === 'Space') voice.pushToTalk(false); });
-$('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) return; boot(); const q = $('q').value.trim(); if (!q) return; $('q').value = ''; closeAsk(); ask(q); };
 
 async function reset() {
   if (resetting) return;
-  if (asking) { toast('WAIT FOR ANSWER BEFORE RESET'); return; }
-  resetting = true; askToken++; asking = false; mineGeneration++; hideEvidence();
-  document.body.classList.remove('thinking'); poller.stop(); stopPreview(); voice.stop();
-  $('q').disabled = true; $('askForm').querySelector('button').disabled = true;
+  resetting = true; mineGeneration++; hideEvidence();
+  document.body.classList.remove('thinking'); poller.stop(); stopPreview(); interactions.stop();
   $('evidence').hidden = true;
   document.querySelectorAll('.line.pending').forEach(line => { line.classList.remove('pending'); line.textContent = 'JARVIS Question cancelled by memory reset.'; });
   try {
@@ -259,18 +200,16 @@ async function reset() {
     rememberedItems = []; renderMine();
     $('transcript').replaceChildren(); $('trail').replaceChildren(); $('heroImg').removeAttribute('src'); $('heard').textContent = ''; showLatest(null);
     toast('MEMORY CLEARED');
-  } catch (error) { toast('RESET FAILED'); console.error(error); }
+  } catch (error) { toast(error.status===409?'WAIT FOR PHONE QUESTION TO FINISH':'RESET FAILED'); console.error(error); }
   finally {
-    resetting = false; $('q').disabled = false; $('askForm').querySelector('button').disabled = false;
-    poller.start(); startPreview(); void refreshMine(); if (started && !document.hidden) voice.start();
+    resetting = false;
+    poller.start(); startPreview(); interactions.start(); void refreshMine();
   }
 }
 
-window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); voice.stop(); mineGeneration++; });
-window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); startPreview(); void refreshMine(); started = false; } });
-window.addEventListener('blur', () => voice.pushToTalk(false));
+window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); interactions.stop(); mineGeneration++; });
+window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); startPreview(); interactions.start(); void refreshMine(); } });
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }
 
-poller.start(); startPreview(); void refreshMine();
-if (!voice.supported) $('micChip').textContent = MIC.unsupported;
+poller.start(); startPreview(); interactions.start(); void refreshMine();

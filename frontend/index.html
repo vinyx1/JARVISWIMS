@@ -36,7 +36,7 @@
         <span id="liveChip" class="chip live" hidden>● LIVE</span>
         <span id="frameChip" class="chip">FRAMES 0</span>
         <span id="linkChip" class="chip">LINK ···</span>
-        <span id="micChip" class="chip">MIC OFF</span>
+        <span id="micChip" class="chip">VOICE ON PHONE</span>
       </div>
     </header>
 
@@ -76,14 +76,7 @@
       <div id="heard" class="heard"></div>
     </section>
 
-    <!-- typed fallback for a loud room: press / -->
-    <form id="askForm" class="ask" hidden>
-      <span class="prompt" aria-hidden="true">&gt;</span>
-      <input id="q" placeholder="Ask Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
-      <button>SEND</button>
-    </form>
-
-    <div class="engage">CLICK TO ENGAGE<small>Say "Jarvis, …" · hold Space to talk · / to type · T subtitles · R reset</small></div>
+    <div class="engage">VOICE ON PHONE<small>Use the capture page to talk · T subtitles · R reset</small></div>
   </main>
 
   <div id="toast" class="toast" hidden></div>
