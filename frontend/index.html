@@ -54,7 +54,7 @@
       <div id="heard" class="heard"></div>
 
       <div id="evidence" class="evidence" hidden>
-        <div class="panel-title">LAST SEEN</div>
+        <div id="evidenceTitle" class="panel-title">LAST SEEN</div>
         <figure class="hero">
           <div class="hero-media">
             <img id="heroImg" alt="Where Jarvis last saw it">
@@ -62,9 +62,12 @@
           </div>
           <figcaption id="heroCap"></figcaption>
         </figure>
+        <div id="candidates" class="candidate-options" aria-label="Possible object matches" hidden></div>
         <div class="panel-title" id="trailTitle" hidden>ROUTE BACK</div>
         <ol id="trail" class="trail"></ol>
       </div>
+
+      <section class="my-items" aria-label="My registered items"><div class="panel-title">MY ITEMS</div><ul id="myItems"><li class="empty-item">No items registered yet.</li></ul><p id="mineStatus" class="mine-status" role="status" hidden></p></section>
 
       <form id="askForm" class="ask">
         <input id="q" placeholder="Type to Jarvis…" autocomplete="off" aria-label="Question for Jarvis">

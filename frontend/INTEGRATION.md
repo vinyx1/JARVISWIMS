@@ -39,3 +39,13 @@ The selected “LAST SEEN” photo now accepts an optional `box` field on its `/
 Missing/malformed/degenerate/out-of-range coordinates hide the outline while the answer/photo still work. New queries and reset immediately clear it. It renders only once the corresponding image has loaded, and image failure clears it. Source-image pixel dimensions determine the SVG viewBox; no frontend estimation of an object's location is performed.
 
 Verification: `node --test frontend/test/*.test.mjs` includes normalized-box validation. `hud-browser.cjs` checks the selected box at desktop, small-laptop and narrow sizes, plus absent/invalid boxes and cleanup. Synthetic coordinates verify rendering; actual model localization quality requires a real image and authorized backend call on the demo machine.
+
+## Round 2 frontend (TASKS.md)
+
+Synced with `c60724b` and the updated API. `kind: "remember"` is accepted and displays a gold `REGISTERED · MY <ITEM>` heading. The item name is resolved from the matching `GET /mine` record; while the list is loading, the heading says `MY ITEM`. Registration shows no route strip. My Items loads on startup, after remember, after reset, and after page restoration; generation guards prevent old responses from restoring cleared entries.
+
+A find answer with multiple valid frames now shows side-by-side candidate buttons. Choosing one updates the main evidence photo and its optional object outline; these are alternatives, not a walking route. Retrace keeps its ordered breadcrumbs.
+
+Phone preview sends 360px JPEGs at quality .45 every 100ms, with at most three encode/upload slots and a two-second upload timeout. Each request carries `ts`; the backend rejects older arrivals. Stop/page hide aborts pending preview requests and invalidates pending encodes. The captioned capture loop remains independent at three seconds. The HUD polls preview serially every 70ms while live, so GET responses cannot race each other. No claim of 10+ real FPS is made until testing the iPhone/tunnel.
+
+`node frontend/test/phone-preview.cjs` (same Playwright/Chrome requirements) verifies timestamped bounded concurrency, image size/quality and Stop using a synthetic camera and delayed requests. The HUD test also checks remember, My Items refresh and candidate selection. No provider key is needed for these tests.

@@ -9,6 +9,7 @@ const api = createApi({ timeoutMs: 15000 });
 const objectOverlay = createObjectOverlay($('heroImg'), $('objectOutline'));
 const FILLERS = ['Checking the footage, sir.', 'One moment, sir. Reviewing the suit cameras.', 'Scanning your recent movements, sir.'];
 let asking = false, askToken = 0, latest = null, resetting = false;
+let rememberedItems = [], mineGeneration = 0, activeEvidence = null;
 
 // ---------- live feed ----------
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -74,7 +75,7 @@ async function pollPreview(token) {
     if (previewWanted && token === previewGeneration) {
       previewController = null; $('liveChip').hidden = !previewLive();
       if (!previewLive()) showLatest(latest, { linked: false });
-      previewTimer = setTimeout(() => pollPreview(token), previewLive() ? 150 : 1000);
+      previewTimer = setTimeout(() => pollPreview(token), previewLive() ? 70 : 1000);
     }
   }
 }
@@ -94,31 +95,76 @@ function say(who, text) {
   return line;
 }
 
-function showEvidence(result) {
-  objectOverlay.clear();
-  const frames = (result.frames || []).filter(f => safeFrameUrl(f.url, location.origin));
-  if (!frames.length) { $('evidence').hidden = true; return; }
-  // find: first frame is the best match. retrace: ordered now -> target, so the target is last.
-  const target = result.kind === 'retrace' ? frames[frames.length - 1] : frames[0];
+function renderMine() {
+  $('myItems').replaceChildren(...rememberedItems.map(item => {
+    const row = el('li'); row.append(el('strong', null, item.item), el('span', null, item.description)); return row;
+  }));
+  if (!rememberedItems.length) $('myItems').append(el('li', 'empty-item', 'No items registered yet.'));
+}
+async function refreshMine() {
+  const token = ++mineGeneration;
+  try {
+    const items = await api.getMine(); if (token !== mineGeneration) return;
+    rememberedItems = items; renderMine(); $('mineStatus').hidden = true;
+    if (activeEvidence?.kind === 'remember') updateEvidenceTitle(activeEvidence.frames[0], activeEvidence);
+  } catch {
+    if (token !== mineGeneration) return;
+    $('mineStatus').textContent = 'Registered items unavailable.'; $('mineStatus').hidden = false;
+  }
+}
+function updateEvidenceTitle(frame, result) {
+  const matches = rememberedItems.filter(item => item.frame_id === frame.id);
+  const item = matches.findLast(item => item.description === frame.note) || matches.at(-1);
+  $('evidenceTitle').textContent = result.kind === 'remember' ? `REGISTERED · MY ${(item?.item || 'ITEM').toUpperCase()}` : result.kind === 'find' && result.frames.length > 1 ? 'POSSIBLE MATCHES · SELECT AN ITEM' : 'LAST SEEN';
+  $('evidenceTitle').classList.toggle('registered', result.kind === 'remember');
+}
+function hideEvidence() {
+  objectOverlay.clear(); activeEvidence = null; $('evidence').hidden = true;
+  $('candidates').replaceChildren(); $('candidates').hidden = true;
+}
+function showHero(target, result) {
+  objectOverlay.clear(); updateEvidenceTitle(target, result);
   $('heroImg').src = `${safeFrameUrl(target.url, location.origin)}?v=${encodeURIComponent(target.ts)}`;
   $('heroImg').alt = target.note || 'Where Jarvis last saw the selected object';
   objectOverlay.set(target.box);
   $('heroCap').textContent = `${target.note || ''} · ${formatSeenAt(target.ts)}`;
-  const steps = result.kind === 'retrace' ? frames : frames.slice(1);
+}
+function showEvidence(result) {
+  hideEvidence();
+  const frames = (result.frames || []).filter(frame => frame && safeFrameUrl(frame.url, location.origin));
+  if (!frames.length) return;
+  activeEvidence = {...result, frames}; const evidence = activeEvidence;
+  const target = result.kind === 'retrace' ? frames[frames.length - 1] : frames[0];
+  showHero(target, evidence);
+  const options = $('candidates');
+  if (result.kind === 'find' && frames.length > 1) {
+    options.hidden = false;
+    frames.forEach((frame, index) => {
+      const button = el('button', 'candidate-option'); button.type = 'button'; button.setAttribute('aria-pressed', String(index === 0));
+      const image = el('img'); image.src = `${safeFrameUrl(frame.url, location.origin)}?v=${encodeURIComponent(frame.ts)}`; image.alt = frame.note || `Match ${index + 1}`;
+      button.append(image, el('span', null, `${index + 1}. ${frame.note || 'Possible match'}`));
+      button.onclick = () => {
+        if (activeEvidence !== evidence) return;
+        showHero(frame, evidence);
+        for (const candidate of options.children) candidate.setAttribute('aria-pressed', String(candidate === button));
+      };
+      options.append(button);
+    });
+  }
+  const steps = result.kind === 'retrace' ? frames : [];
   $('trailTitle').hidden = !steps.length;
-  $('trail').replaceChildren(...steps.map((f, i) => {
-    const li = el('li');
-    const img = el('img'); img.src = safeFrameUrl(f.url, location.origin); img.alt = f.note || `step ${i + 1}`;
-    li.append(img, el('span', null, `${i + 1}. ${f.note || ''}`));
-    return li;
+  $('trail').replaceChildren(...steps.map((frame, index) => {
+    const li = el('li'), image = el('img'); image.src = safeFrameUrl(frame.url, location.origin); image.alt = frame.note || `step ${index + 1}`;
+    li.append(image, el('span', null, `${index + 1}. ${frame.note || ''}`)); return li;
   }));
   $('evidence').hidden = false;
+  if (result.kind === 'remember') void refreshMine();
 }
 
 async function ask(question) {
   question = question.trim();
   if (!question || asking || resetting) return;
-  asking = true; const token = ++askToken; objectOverlay.clear(); $('evidence').hidden = true;
+  asking = true; const token = ++askToken; hideEvidence();
   say('you', question);
   voice.speak(FILLERS[Math.floor(Math.random() * FILLERS.length)], { interrupt: true });
   const pending = say('jarvis', 'Reviewing footage…'); pending.classList.add('pending');
@@ -168,7 +214,8 @@ $('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) retu
 
 async function reset() {
   if (resetting) return;
-  resetting = true; askToken++; asking = false; objectOverlay.clear();
+  if (asking) { toast('WAIT FOR ANSWER BEFORE RESET'); return; }
+  resetting = true; askToken++; asking = false; mineGeneration++; hideEvidence();
   document.body.classList.remove('thinking'); poller.stop(); stopPreview(); voice.stop();
   $('q').disabled = true; $('askForm').querySelector('button').disabled = true;
   $('evidence').hidden = true;
@@ -177,20 +224,21 @@ async function reset() {
     const log = await api.getLog();
     if (log.some(entry => entry.caption === null)) { toast('STOP CAPTURE · WAIT FOR ANALYSIS'); return; }
     await api.resetMemory();
+    rememberedItems = []; renderMine();
     $('transcript').replaceChildren(); $('trail').replaceChildren(); $('heroImg').removeAttribute('src'); $('heard').textContent = ''; showLatest(null);
     toast('MEMORY CLEARED');
   } catch (error) { toast('RESET FAILED'); console.error(error); }
   finally {
     resetting = false; $('q').disabled = false; $('askForm').querySelector('button').disabled = false;
-    poller.start(); startPreview(); if (started && !document.hidden) voice.start();
+    poller.start(); startPreview(); void refreshMine(); if (started && !document.hidden) voice.start();
   }
 }
 
-window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); voice.stop(); });
-window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); startPreview(); started = false; } });
+window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); voice.stop(); mineGeneration++; });
+window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); startPreview(); void refreshMine(); started = false; } });
 window.addEventListener('blur', () => voice.pushToTalk(false));
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }
 
-poller.start(); startPreview();
+poller.start(); startPreview(); void refreshMine();
 if (!voice.supported) $('micChip').textContent = MIC.unsupported;

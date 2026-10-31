@@ -63,3 +63,9 @@ test('latest polling ignores pre-reset responses and accepts caption completion 
  poller.start();await new Promise(r=>setTimeout(r,0));assert.equal(updates[0].caption,null);
  entry={id:'f_1',caption:{scene:'helmet on chair'}};await tick();assert.equal(updates.at(-1).caption.scene,'helmet on chair');poller.stop();
 });
+test('remember replies and registered-item list use the updated team API',async()=>{
+ const remembered={answer:'Noted, sir.',kind:'remember',frames:[]};
+ const mine=[{item:'laptop',description:'silver laptop with a sticker',frame_id:'f_1',url:'/frames/f_1.jpg',ts:1234}];
+ const api=createApi({fetchImpl:async url=>new Response(JSON.stringify(url==='/mine'?mine:remembered))});
+ assert.equal((await api.askQuestion('this is my laptop')).kind,'remember');assert.deepEqual(await api.getMine(),mine);
+});
