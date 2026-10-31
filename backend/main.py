@@ -4,6 +4,9 @@ import inspect
 import logging
 import os
 import re
+import shutil
+import subprocess
+import tempfile
 import time
 from pathlib import Path
 
@@ -174,17 +177,42 @@ class Speak(BaseModel):
     text: str
 
 
+SAY_VOICE = os.getenv("JARVIS_SAY_VOICE", "Daniel")
+
+
+def _say_wav(text: str) -> bytes | None:
+    """The Mac's own Daniel voice rendered to WAV by `say` (~0.7s). Played as a normal audio file,
+    so it doesn't depend on Chrome's speechSynthesis, which can freeze browser-wide on macOS."""
+    if not shutil.which("say"):
+        return None
+    with tempfile.TemporaryDirectory() as tmp:
+        out = Path(tmp) / "jarvis.wav"
+        try:
+            subprocess.run(["say", "-v", SAY_VOICE, "-r", "185", "-o", str(out), "--data-format=LEI16@22050",
+                            text[:600]], check=True, timeout=8, capture_output=True)
+            return out.read_bytes()
+        except Exception:
+            log.exception("say failed")
+            return None
+
+
 @app.post("/speak")
 async def speak(body: Speak):
-    """Jarvis's ElevenLabs voice as mp3. 204 means 'use the browser voice' (no key, slow, or failed)."""
+    """Jarvis's voice as audio: ElevenLabs if ELEVENLABS_API_KEY is set, else the Mac's Daniel voice
+    via `say`. 204 only if both fail; then the HUD falls back to the browser's speechSynthesis."""
+    text = (body.text or "").strip()
+    if not text:
+        return Response(status_code=204)
     try:
-        mp3 = await asyncio.to_thread(voice.synthesize, body.text)
+        mp3 = await asyncio.to_thread(voice.synthesize, text)
+        if mp3:
+            return Response(mp3, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+        wav = await asyncio.to_thread(_say_wav, text)
+        if wav:
+            return Response(wav, media_type="audio/wav", headers={"Cache-Control": "no-store"})
     except Exception:
         log.exception("/speak failed")
-        mp3 = None
-    if not mp3:
-        return Response(status_code=204)
-    return Response(mp3, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
+    return Response(status_code=204)
 
 
 @app.get("/mine")
