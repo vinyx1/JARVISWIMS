@@ -18,7 +18,7 @@ Read `API.md` for the frontend/backend contract and `README.md` for setup.
 |---|---|---|
 | Jogindar | A — frontend (laptop HUD + phone capture page) | `frontend/**` |
 | Vince | B — backend, tunnel, demo server | `backend/main.py`, `backend/store.py`, `backend/requirements.txt`, `scripts/**` |
-| Kenny | C — AI eyes: per-frame captions, demo-route photos | `backend/ai.py`, `prompts/caption.md`, `samples/**` |
+| Kenny | C — AI eyes: per-frame captions, demo-route photos | `backend/ai.py`, `prompts/caption.md`, `samples/**`, `tests/real_log.json` |
 | Paul | D — AI brain and voice: answers, Jarvis's personality, answer tests, stretch commentary; pitch, Devpost and backup video from 1:30 | `backend/answer.py`, `prompts/answer.md`, `tests/**` |
 
 - Only edit files you own. If you need a change elsewhere, stop and tell your
@@ -62,6 +62,27 @@ photos of the demo route, in walking order (`01.jpg`…), and
 - **Vince (backend):** the real endpoints, the cloudflared tunnel, and the iPhone
   capture flow. You don't need finished prompts or the HUD.
 - **Integration is just merging to `main`.** At 12:30, everything runs on Vince's laptop.
+
+## Integration rules (so the pieces line up)
+
+1. **Run the smoke test before and after merging to `main`.** With the backend running:
+   `backend/.venv/bin/python scripts/smoke.py` resets, replays `samples/`, waits
+   for captions, asks a question, and checks every response against `API.md`.
+   **Don't merge if it prints FAIL.**
+2. **Kenny → Paul handoff (the weakest seam).** Paul's prompt reads Kenny's
+   captions, so the words must match: "helmet" in a caption, not "dark headgear".
+   As soon as real captions work, Kenny commits them as `tests/real_log.json`
+   (`curl localhost:8000/log > tests/real_log.json` after replaying `samples/`),
+   and Paul tests on that instead of his hand-written log. Kenny: tell Paul
+   whenever the caption prompt changes.
+3. **Never crash on bad model output.** Claude occasionally returns malformed JSON.
+   - Kenny: on a parse or API error, return a valid Caption
+     (`{"scene": "unclear frame", "room_guess": "unknown", "objects": [], "landmarks": []}`).
+   - Paul: on a parse or API error, return
+     `{"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}`.
+4. **Paul only returns frame ids that exist in `log`.** Drop any others, and fill
+   in `url` and `ts` from the log entry. The model only provides `id` and `note`.
+   The smoke test checks this.
 
 ## Product decisions (settled)
 
