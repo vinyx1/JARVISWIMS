@@ -1,4 +1,4 @@
-# Echo 👻
+# Untitled ghost project 👻 (name TBD)
 
 The ghost of your last 10 minutes. Wear your phone, walk around, then ask
 "where's my jacket?" or "retrace my steps."
