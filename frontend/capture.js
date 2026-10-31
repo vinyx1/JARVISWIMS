@@ -1,18 +1,19 @@
 import {createApi} from './api.js';
 import {createCameraController,listCameras,captureFrame} from './camera.js';
 import {createCaptureLoop} from './core.js';
+import {createPreviewSender} from './preview.js';
 const $=id=>document.getElementById(id),video=$('phoneVideo'),api=createApi();
 let generation=0,opening=false,uncertain=false,wakeLock=null;
 function status(text,error=false){$('phoneStatus').textContent=text;$('phoneStatus').classList.toggle('error',error);}
 function controls(){ $('phoneStart').disabled=opening||loop.running||loop.pending||uncertain;$('phoneStop').disabled=!opening&&!camera.stream;$('phoneDevice').disabled=opening||!!camera.stream;$('phoneBadge').textContent=loop.running?'CAPTURING':camera.stream?'PREVIEW':'CAMERA OFF';}
 async function releaseWake(){const lock=wakeLock;wakeLock=null;if(lock)await lock.release().catch(()=>{});}
-function stop(){generation++;opening=false;loop.stop();camera.stop();void releaseWake();status('Capture stopped. Saved photos remain on the laptop.');controls();}
+function stop(){generation++;opening=false;loop.stop();preview.stop();camera.stop();void releaseWake();status('Capture stopped. Saved photos remain on the laptop.');controls();}
 const camera=createCameraController({media:{getUserMedia:constraints=>{
  const requested=$('phoneDevice').value;
  if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1280}};
  return navigator.mediaDevices.getUserMedia(constraints);
 }},attach(stream){video.srcObject=stream;if(stream)video.play().catch(()=>{});},onEnded(){stop();status('Camera disconnected. Tap Start to reconnect.',true);}});
-const loop=createCaptureLoop({sample:()=>captureFrame(video),async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}catch(error){if(error.uncertain){uncertain=true;status(error.message,true);}throw error;}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error){status(error.message,true);controls();void releaseWake();}});
+const loop=createCaptureLoop({sample:()=>captureFrame(video),async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}catch(error){if(error.uncertain){uncertain=true;status(error.message,true);}throw error;}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error){preview.stop();status(error.message,true);controls();void releaseWake();}});
 $('phoneStart').onclick=async()=>{
  if(!navigator.mediaDevices?.getUserMedia){status('Camera access needs HTTPS (or localhost). Open the secure URL from the laptop.',true);return;}
  const token=++generation;opening=true;controls();status('Waiting for camera permission…');
@@ -23,7 +24,7 @@ $('phoneStart').onclick=async()=>{
   const selected=stream.getVideoTracks()[0]?.getSettings().deviceId;
   const devices=await listCameras();if(token!==generation)return;
   $('phoneDevice').replaceChildren();for(const [i,device] of devices.entries()){const option=document.createElement('option');option.value=device.deviceId;option.textContent=device.label||`Camera ${i+1}`;$('phoneDevice').append(option);}if(selected)$('phoneDevice').value=selected;
-  loop.start();status('Capturing. Keep this page in the foreground.');
+  loop.start();preview.start();status('Capturing. Keep this page in the foreground.');
   if(navigator.wakeLock?.request){navigator.wakeLock.request('screen').then(lock=>{if(token===generation&&loop.running)wakeLock=lock;else void lock.release();}).catch(()=>{});}
  }catch(error){if(token===generation){camera.stop();status(error.name==='NotAllowedError'?'Camera permission denied. Allow access and retry.':error.message,true);}}
  finally{if(token===generation){opening=false;controls();}}
@@ -32,14 +33,10 @@ $('phoneStop').onclick=stop;
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&(loop.running||opening||camera.stream)){stop();status('Capture paused because the page was hidden. Tap Start to resume.');}});
 window.addEventListener('pagehide',stop);controls();
 
-// Live preview for the HUD: small frames ~5x/second while capturing. Fire-and-forget:
-// a dropped preview frame never stops the real 3s capture loop.
-const PREVIEW_MS=200;let previewBusy=false;
-setInterval(async()=>{
- if(!loop.running||previewBusy||document.hidden)return;
- previewBusy=true;
- try{
-  const frame=await captureFrame(video,{width:480,quality:.5});
-  if(frame){const body=new FormData();body.append('image',frame.blob,'p.jpg');await fetch('/preview',{method:'POST',body,signal:AbortSignal.timeout(2000)});}
- }catch{}finally{previewBusy=false;}
-},PREVIEW_MS);
+// Up to three preview uploads may overlap through the tunnel; timestamps let the backend reject stale arrivals.
+const previewApi=createApi({timeoutMs:2000});
+const preview=createPreviewSender({
+ sample:()=>captureFrame(video,{width:360,quality:.45}),
+ send:(blob,ts,signal)=>previewApi.uploadPreview(blob,ts,signal),
+ canSend:()=>loop.running&&!document.hidden
+});

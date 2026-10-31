@@ -124,3 +124,25 @@ body.thinking .arc { animation-duration: .6s; }
   .toast { max-width: 90vw; width: max-content; font-size: 12px; letter-spacing: .12em; }
 }
 @media (prefers-reduced-motion: reduce) { .line.pending { animation: none; } }
+
+/* Outline only the selected object in its source evidence photo, never the moving live feed. */
+.hero-media { position: relative; }
+.object-outline { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+.selected-object-box { fill: rgba(255, 193, 77, .08); stroke: var(--gold); stroke-width: 3; vector-effect: non-scaling-stroke; }
+
+/* Round 2: registration and explicit choices for similar-looking items. */
+.evidence { min-height: 0; max-height: 64vh; overflow-y: auto; }
+.hero { flex-shrink: 0; }
+.registered { color: var(--gold); }
+.my-items { border-top: 1px solid var(--line); padding-top: 10px; }
+.my-items ul { list-style: none; padding: 0; margin: 7px 0 0; max-height: 90px; overflow-y: auto; }
+.my-items li { font-size: 13px; line-height: 1.4; margin: 5px 0; }
+.my-items li strong { color: var(--gold); margin-right: 8px; text-transform: uppercase; }
+.my-items li span, .empty-item, .mine-status { color: var(--muted); }
+.mine-status { font-size: 12px; margin: 5px 0; }
+.candidate-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+.candidate-option { min-width: 0; padding: 6px; border: 1px solid var(--cyan-dim); background: #06141c; color: var(--text); text-align: left; font: inherit; cursor: pointer; }
+.candidate-option[aria-pressed="true"] { border-color: var(--gold); }
+.candidate-option:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+.candidate-option img { display: block; width: 100%; height: 80px; object-fit: contain; background: #000; }
+.candidate-option span { display: block; font-size: 12px; line-height: 1.3; margin-top: 4px; overflow-wrap: anywhere; }
