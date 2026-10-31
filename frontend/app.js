@@ -2,9 +2,11 @@
 import { createApi } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
 import { createVoice } from './voice.js';
+import { createObjectOverlay } from './overlay.js';
 
 const $ = id => document.getElementById(id);
 const api = createApi({ timeoutMs: 15000 });
+const objectOverlay = createObjectOverlay($('heroImg'), $('objectOutline'));
 const FILLERS = ['Checking the footage, sir.', 'One moment, sir. Reviewing the suit cameras.', 'Scanning your recent movements, sir.'];
 let asking = false, askToken = 0, latest = null, resetting = false;
 
@@ -93,11 +95,14 @@ function say(who, text) {
 }
 
 function showEvidence(result) {
+  objectOverlay.clear();
   const frames = (result.frames || []).filter(f => safeFrameUrl(f.url, location.origin));
   if (!frames.length) { $('evidence').hidden = true; return; }
   // find: first frame is the best match. retrace: ordered now -> target, so the target is last.
   const target = result.kind === 'retrace' ? frames[frames.length - 1] : frames[0];
-  $('heroImg').src = safeFrameUrl(target.url, location.origin);
+  $('heroImg').src = `${safeFrameUrl(target.url, location.origin)}?v=${encodeURIComponent(target.ts)}`;
+  $('heroImg').alt = target.note || 'Where Jarvis last saw the selected object';
+  objectOverlay.set(target.box);
   $('heroCap').textContent = `${target.note || ''} · ${formatSeenAt(target.ts)}`;
   const steps = result.kind === 'retrace' ? frames : frames.slice(1);
   $('trailTitle').hidden = !steps.length;
@@ -113,7 +118,7 @@ function showEvidence(result) {
 async function ask(question) {
   question = question.trim();
   if (!question || asking || resetting) return;
-  asking = true; const token = ++askToken; $('evidence').hidden = true;
+  asking = true; const token = ++askToken; objectOverlay.clear(); $('evidence').hidden = true;
   say('you', question);
   voice.speak(FILLERS[Math.floor(Math.random() * FILLERS.length)], { interrupt: true });
   const pending = say('jarvis', 'Reviewing footage…'); pending.classList.add('pending');
@@ -163,7 +168,7 @@ $('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) retu
 
 async function reset() {
   if (resetting) return;
-  resetting = true; askToken++; asking = false;
+  resetting = true; askToken++; asking = false; objectOverlay.clear();
   document.body.classList.remove('thinking'); poller.stop(); stopPreview(); voice.stop();
   $('q').disabled = true; $('askForm').querySelector('button').disabled = true;
   $('evidence').hidden = true;

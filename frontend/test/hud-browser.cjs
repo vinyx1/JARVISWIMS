@@ -21,7 +21,7 @@ let browser;
  let latest=null,offline=false,resetCount=0,latestCalls=0,previewCalls=0,previewMode='empty',askMode='find';
  const entry=(id,caption)=>({id,ts:Date.now()-5000,url:`/frames/${id}.jpg`,caption});
  const caption={scene:'A red helmet is on the workbench by the exit.',room_guess:'workshop',objects:['red helmet'],landmarks:['exit sign','workbench']};
- const first=entry('f_000001',caption);
+ const first={...entry('f_000001',caption),box:[.35,.33,.51,.53]};
  await page.route('**/preview.jpg',r=>{previewCalls++;return r.fulfill(previewMode==='live'?{body:photo,contentType:'image/svg+xml'}:{status:204});});
  await page.route('**/latest',r=>{latestCalls++;return r.fulfill(offline?{status:503,json:{detail:'test offline'}}:{json:latest});});
  await page.route('**/log',r=>r.fulfill({json:latest?[latest]:[]}));
@@ -30,7 +30,7 @@ let browser;
  await page.route('**/ask',async r=>{
    if(askMode==='error'){await r.fulfill({status:503,json:{detail:'test error'}});return;}
    await new Promise(resolve=>setTimeout(resolve,askMode==='slow'?1100:350));
-   const frames=askMode==='retrace'?[{...entry('f_000003',caption),note:'Stage'},{...first,note:'Helmet on workbench'}]:askMode==='empty'?[]:[{...first,note:'Helmet on workbench'}];
+   const frames=askMode==='invalid'?[{...first,box:[100,100,200,200],note:'Invalid localization'}]:askMode==='retrace'?[{...entry('f_000003',caption),note:'Stage'},{...first,note:'Helmet on workbench'}]:askMode==='empty'?[]:[{...first,note:'Helmet on workbench'}];
    await r.fulfill({json:{answer:askMode==='empty'?'I have not seen that object, sir.':answer,kind:askMode==='retrace'?'retrace':'find',frames}});
  });
  await page.goto(process.env.HUD_URL||'http://127.0.0.1:8000');await page.getByText('LINK OK',{exact:true}).waitFor();
@@ -45,15 +45,27 @@ let browser;
  async function ask(question){await page.locator('#q').fill(question);await page.locator('#askForm').evaluate(e=>e.requestSubmit());}
  await ask('Where is my helmet?');await page.getByText(answer,{exact:false}).waitFor();
  check(await page.locator('#evidence').isVisible(),'find answer must include evidence');
- check(await page.locator('#heroImg').getAttribute('src')==='/frames/f_000001.jpg','find must show matched photo');
+ check(new URL(await page.locator('#heroImg').getAttribute('src'),'http://localhost').pathname==='/frames/f_000001.jpg','find must show matched photo');
  check(await page.locator('#transcript').textContent().then(t=>t.includes(answer)),"Paul's full find answer must remain visible");
+ await page.locator('#objectOutline').waitFor({state:'visible',timeout:3000});
+ async function checkOutline(){
+   return page.evaluate(()=>{
+     const img=document.getElementById('heroImg'),box=img.getBoundingClientRect(),rect=document.querySelector('#objectOutline rect').getBoundingClientRect();
+     const scale=Math.min(box.width/img.naturalWidth,box.height/img.naturalHeight);
+     const left=box.left+(box.width-img.naturalWidth*scale)/2,top=box.top+(box.height-img.naturalHeight*scale)/2;
+     return Math.abs(rect.left-(left+.35*img.naturalWidth*scale))<1&&Math.abs(rect.top-(top+.33*img.naturalHeight*scale))<1&&Math.abs(rect.width-.16*img.naturalWidth*scale)<1&&Math.abs(rect.height-.20*img.naturalHeight*scale)<1;
+   });
+ }
+ for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:390,height:844}]){await page.setViewportSize(viewport);check(await checkOutline(),`selected object box is misaligned at ${viewport.width}`);}
+ await page.setViewportSize({width:1440,height:900});
  if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH,fullPage:true});
  askMode='error';await ask('Where is my screwdriver?');await page.waitForTimeout(500);
- check(!await page.locator('#evidence').isVisible(),'failed new question must not leave previous object evidence visible');
+ check(!await page.locator('#evidence').isVisible(),'failed new question must not leave previous object evidence visible');check(await page.locator('#objectOutline').getAttribute('hidden')!==null,'new request must clear the object outline');
  check(!await page.locator('body').evaluate(e=>e.classList.contains('thinking')),'failed request must exit thinking state');
  askMode='retrace';await ask('Retrace my steps');await page.waitForTimeout(600);
  check(await page.locator('#trail li').count()===2,'retrace should preserve breadcrumb sequence');
- check(await page.locator('#heroImg').getAttribute('src')==='/frames/f_000001.jpg','retrace target is the last returned frame');
+ check(new URL(await page.locator('#heroImg').getAttribute('src'),'http://localhost').pathname==='/frames/f_000001.jpg','retrace target is the last returned frame');
+ askMode='invalid';await ask('Find object with invalid coordinates');await page.waitForTimeout(600);check(!await page.locator('#objectOutline').isVisible(),'invalid boxes must not draw an outline');
  askMode='empty';await ask('Find the missing wrench');await page.waitForTimeout(600);check(!await page.locator('#evidence').isVisible(),'empty results must hide evidence');
  askMode='find';await page.locator('#q').blur();
  await page.evaluate(()=>window.testSpeech.recognizers.at(-1).emit('Jarvis, where is my helmet?'));await page.waitForTimeout(600);
@@ -76,6 +88,6 @@ let browser;
  check(await page.locator('#micChip').textContent()==='MIC BLOCKED','permission-denied microphone must be indicated');
  check(await page.locator('#q').isEnabled(),'typed fallback must work when microphone is blocked');
  assert.deepEqual(errors,[]);assert.deepEqual(failures,[]);
- console.log('HUD browser QA passed: live-preview fallback and feed transitions, full answers/photos/breadcrumbs, errors, synthetic wake/PTT/TTS, reset races, page restoration, layouts and microphone denial. No API key or real microphone used.');
+ console.log('HUD browser QA passed: live-preview fallback and feed transitions, selected-object outline alignment and full answers/photos/breadcrumbs, errors, synthetic wake/PTT/TTS, reset races, page restoration, layouts and microphone denial. No API key or real microphone used.');
  await browser.close();
 })().catch(async error=>{console.error(error);await browser?.close();process.exitCode=1;});

@@ -124,3 +124,8 @@ body.thinking .arc { animation-duration: .6s; }
   .toast { max-width: 90vw; width: max-content; font-size: 12px; letter-spacing: .12em; }
 }
 @media (prefers-reduced-motion: reduce) { .line.pending { animation: none; } }
+
+/* Outline only the selected object in its source evidence photo, never the moving live feed. */
+.hero-media { position: relative; }
+.object-outline { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+.selected-object-box { fill: rgba(255, 193, 77, .08); stroke: var(--gold); stroke-width: 3; vector-effect: non-scaling-stroke; }
