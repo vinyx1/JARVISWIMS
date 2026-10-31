@@ -31,17 +31,37 @@ Response `200`:
 ```json
 {
   "answer": "Your helmet is on the chair by the exit sign, sir. Turn back past the snack table.",
-  "kind": "find" | "retrace" | "other",
+  "kind": "find" | "retrace" | "remember" | "other",
   "frames": [ { "id": "f_000101", "url": "/frames/f_000101.jpg", "ts": 1730400000000, "note": "jacket on couch" } ]
 }
 ```
 For `retrace`, `frames` is ordered from **now back to the target** (the
-breadcrumbs to walk). For `find`, the first frame is the best match.
+breadcrumbs to walk). For `find`, the first frame is the best match. If several
+different items match (two monitors), `frames` holds each candidate, best first.
+
+**Remember** ("this is my laptop", "remember this laptop", "that bag is mine"): the
+backend spots this itself, takes what the camera sees right now, and registers it.
+The reply is `kind: "remember"`, and `frames` holds the one photo with `note` set to the
+description. The HUD shows it as `REGISTERED · MY <ITEM>`.
+```json
+{ "answer": "Noted, sir. Your laptop: a silver MacBook with a pumpkin sticker.",
+  "kind": "remember",
+  "frames": [ { "id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000, "note": "silver MacBook with a pumpkin sticker" } ] }
+```
+
+## GET /mine
+
+The registered items, oldest first. Cleared by `POST /reset`.
+```json
+[ { "item": "laptop", "description": "silver MacBook with a pumpkin sticker", "frame_id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000 } ]
+```
+After registration, captions write the item as `"MY laptop (silver MacBook, pumpkin sticker) on table"`.
 
 ## POST /preview  ·  GET /preview.jpg
 
 Live preview for the HUD, separate from `/frame`. While capturing, the phone sends a
-small JPEG (`image`, ~480px, low quality) about 5 times a second. The backend keeps only
+small JPEG (`image`, ~360px, low quality, plus an optional `ts` in ms) about 10 times a second,
+with up to 3 uploads in flight. The backend ignores a frame whose `ts` is older than the one it holds. The backend keeps only
 the newest one **in memory**: it is never captioned, saved, or seen by Jarvis.
 `GET /preview.jpg` returns it, or `204` if nothing arrived in the last 3s (the HUD then
 falls back to `/latest`). `POST /reset` clears it.
@@ -59,7 +79,7 @@ Returns the full caption log as a JSON array of `LogEntry`. For debugging and th
 
 ## POST /reset
 
-Clears the log and stored frames. Use it between demo runs.
+Clears the log, stored frames, the preview and registered items (`/mine`). Use it between demo runs.
 
 ## Types
 
@@ -72,4 +92,5 @@ type Caption = {
 };
 
 type LogEntry = { id: string; ts: number; url: string; caption: Caption | null };
+type MyItem = { item: string; description: string; frame_id: string; url: string; ts: number };
 ```
