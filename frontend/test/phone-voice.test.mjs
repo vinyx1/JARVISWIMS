@@ -32,3 +32,10 @@ test('suspended device audio exposes replay instead of silently claiming playbac
  class Context{constructor(){this.state='suspended';this.sampleRate=44100;}resume(){return Promise.resolve();}createBuffer(){}createBufferSource(){return {connect(){},start(){}};}decodeAudioData(){return Promise.resolve({});}}
  globalThis.window={AudioContext:Context};const speaker=createDeviceSpeaker({onBlocked:()=>blocked++,fetchImpl:async()=>({ok:true,headers:{get:()=> 'audio/wav'},arrayBuffer:async()=>new ArrayBuffer(1)})});speaker.unlock();await speaker.play('Here, sir.');assert.equal(blocked,1);speaker.stop();
 });
+test('ending before the phone finalises still submits the words it heard (no false "no speech")',()=>{
+ const s=setup();s.controller.listen();s.instances[0].emit('where is my wallet',false);s.instances[0].onend();
+ assert.deepEqual(s.questions,['where is my wallet']);assert.ok(!s.states.includes('no-speech'));
+});
+test('silence still reports no speech',()=>{
+ const s=setup();s.controller.listen();s.instances[0].onend();assert.deepEqual(s.questions,[]);assert.equal(s.states.at(-1),'no-speech');
+});

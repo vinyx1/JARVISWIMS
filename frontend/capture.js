@@ -71,7 +71,8 @@ const phoneVoice=createPhoneConversation({
  onAnswer(result){lastReply=result.answer;playbackBlocked=false;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
  onError(error){$('phoneAnswer').textContent=error.message;}
 });
-$('phoneTalk').onclick=()=>{playbackBlocked=false;wake.stop();phoneVoice.listen();};
+// If hands-free was listening, let iOS release the mic before tap-to-talk opens it again.
+$('phoneTalk').onclick=()=>{playbackBlocked=false;if(wake.on){wake.stop();setTimeout(()=>phoneVoice.listen(),350);}else phoneVoice.listen();};
 // Hands-free: keep listening for "Jarvis …". Paused while Jarvis answers (an open iPhone mic can
 // route the reply to the quiet earpiece), resumed afterwards.
 const wake=createWakeListener({
