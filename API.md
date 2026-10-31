@@ -28,13 +28,18 @@ before taking the next photo: fire and forget, and log errors.
 Response `200`:
 ```json
 {
-  "answer": "Your jacket lies upon the couch, mortal... Turn back past the kitchen.",
+  "answer": "Your helmet is on the chair by the exit sign, sir. Turn back past the snack table.",
   "kind": "find" | "retrace" | "other",
   "frames": [ { "id": "f_000101", "url": "/frames/f_000101.jpg", "ts": 1730400000000, "note": "jacket on couch" } ]
 }
 ```
 For `retrace`, `frames` is ordered from **now back to the target** (the
 breadcrumbs to walk). For `find`, the first frame is the best match.
+
+## GET /latest
+
+Returns the newest `LogEntry`, or `null` if nothing has been captured yet. The
+laptop HUD polls this about once a second to show the live feed.
 
 ## GET /log
 
