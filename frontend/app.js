@@ -190,7 +190,7 @@ const interactions=createLatestPoller({
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
     // The phone's 'Jarvis speaks on: the laptop' arrives with the exchange; V forces it on this laptop too.
-    if((exchange.speak_on==='laptop'||laptopVoice)&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
+    if((exchange.speak_on==='laptop'||exchange.speak_on==='both'||laptopVoice)&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
     firstExchange=false;
     say('you',exchange.question);say('jarvis',exchange.result.answer);
     showEvidence(exchange.result);

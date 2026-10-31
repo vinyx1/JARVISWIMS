@@ -65,7 +65,7 @@ async def frame(
 
 class Ask(BaseModel):
     question: str
-    speak_on: Literal["phone", "laptop"] = "phone"   # where Jarvis says the reply (picked on the phone)
+    speak_on: Literal["phone", "laptop", "both"] = "phone"   # where Jarvis says the reply (picked on the phone)
 
 
 # ---------- "this is my laptop, remember it" ----------
