@@ -34,6 +34,12 @@ backend/.venv/bin/python scripts/replay.py --every 1        # faster
 
 `samples/` holds ~15 photos of the real demo route, in walking order (`01.jpg`, `02.jpg`, …).
 
+## Smoke test (before and after every merge)
+
+```bash
+backend/.venv/bin/python scripts/smoke.py           # PASS or FAIL, end to end
+```
+
 ## Run on the iPhone (Vince's laptop only; the camera needs HTTPS)
 
 ```bash
