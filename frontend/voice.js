@@ -1,11 +1,19 @@
 // Jarvis voice: wake word ("Jarvis, ..."), hold-space push-to-talk, and British speech out.
 // Chrome on the Mac only (webkitSpeechRecognition). Everything degrades to the typed box.
+//
+// Speech out: the ElevenLabs "Jarvis" voice via POST /speak (backend/voice.py). If /speak
+// is missing, slow (> SPEAK_TIMEOUT_MS) or fails, the browser's British voice speaks instead.
+// onLevel(0..1) reports how loud Jarvis is, so the HUD's reactor can glow with his voice.
 
 const WAKE = /^\s*(?:hey|ok|okay)?\s*j[ae]rv[iu]s\b[\s,.!?]*/i;
+const SPEAK_TIMEOUT_MS = 2500;
 
-export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {} }) {
+export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}, onLevel = () => {} }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null, wanted = false, ptt = false, pttText = '', armedUntil = 0, voice = null;
+  let queue = Promise.resolve(), generation = 0, playing = null, browserTalking = false;
+  let audioCtx = null, analyser = null, levelRaf = 0;
+  const preloaded = new Map();   // text -> Promise<Blob|null>, for lines we know in advance
 
   function pickVoice() {
     const voices = speechSynthesis.getVoices();
@@ -15,22 +23,109 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
   }
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 
-  function speak(text, { interrupt = false } = {}) {
-    if (!('speechSynthesis' in window) || !text) return;
-    if (interrupt) speechSynthesis.cancel();
-    const u = new SpeechSynthesisUtterance(text);
-    if (voice) u.voice = voice;
-    u.lang = voice?.lang || 'en-GB';
-    u.rate = 1.02; u.pitch = 0.9;
-    speechSynthesis.speak(u);
+  // ---------- speech out ----------
+  async function requestSpeech(text) {
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), SPEAK_TIMEOUT_MS);
+    try {
+      const r = await fetch('/speak', {
+        method: 'POST', signal: ctrl.signal,
+        headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ text }),
+      });
+      if (r.status !== 200) return null;
+      const blob = await r.blob();
+      return blob.type.startsWith('audio/') ? blob : null;
+    } catch {
+      return null;                                   // offline or too slow: browser voice
+    } finally {
+      clearTimeout(timer);
+    }
   }
 
+  function preload(texts) { texts.forEach(t => { if (!preloaded.has(t)) preloaded.set(t, requestSpeech(t)); }); }
+
+  function connectAnalyser(audio) {
+    try {
+      audioCtx ??= new AudioContext();
+      if (!analyser) { analyser = audioCtx.createAnalyser(); analyser.fftSize = 512; analyser.connect(audioCtx.destination); }
+      audioCtx.createMediaElementSource(audio).connect(analyser);
+      audioCtx.resume().catch(() => {});
+    } catch { /* no Web Audio: audio still plays, the reactor just pulses */ }
+  }
+
+  function playBlob(blob) {
+    return new Promise(resolve => {
+      const url = URL.createObjectURL(blob);
+      const audio = new Audio(url);
+      playing = audio;
+      connectAnalyser(audio);
+      const done = () => { if (playing === audio) playing = null; URL.revokeObjectURL(url); resolve(); };
+      audio.onended = done; audio.onerror = done; audio.onpause = done;
+      audio.play().then(trackLevel, done);
+    });
+  }
+
+  function speakBrowser(text) {
+    return new Promise(resolve => {
+      if (!('speechSynthesis' in window)) return resolve();
+      const u = new SpeechSynthesisUtterance(text);
+      if (voice) u.voice = voice;
+      u.lang = voice?.lang || 'en-GB';
+      u.rate = 1.02; u.pitch = 0.9;
+      const safety = setTimeout(finish, 3000 + text.length * 90);   // Chrome sometimes never fires onend
+      function finish() { clearTimeout(safety); browserTalking = false; resolve(); }
+      u.onstart = () => { browserTalking = true; trackLevel(); };
+      u.onend = finish; u.onerror = finish;
+      speechSynthesis.speak(u);
+    });
+  }
+
+  const isSpeaking = () => !!playing || browserTalking || ('speechSynthesis' in window && speechSynthesis.speaking);
+
+  function trackLevel() {
+    if (levelRaf) return;
+    const buf = new Uint8Array(512);
+    const tick = t => {
+      let level = 0;
+      if (playing && analyser) {
+        analyser.getByteTimeDomainData(buf);
+        let sum = 0;
+        for (const v of buf) sum += ((v - 128) / 128) ** 2;
+        level = Math.min(1, Math.sqrt(sum / buf.length) * 5);
+      } else if (browserTalking) {
+        level = 0.35 + 0.3 * Math.abs(Math.sin(t / 95));            // no audio data: a speaking pulse
+      }
+      onLevel(level);
+      if (isSpeaking()) levelRaf = requestAnimationFrame(tick);
+      else { levelRaf = 0; onLevel(0); }
+    };
+    levelRaf = requestAnimationFrame(tick);
+  }
+
+  function speak(text, { interrupt = false } = {}) {
+    if (!text) return;
+    if (interrupt) {
+      generation++;
+      playing?.pause();
+      if ('speechSynthesis' in window) speechSynthesis.cancel();
+      queue = Promise.resolve();
+    }
+    const gen = generation;
+    const audio = preloaded.get(text) ?? requestSpeech(text);    // start fetching now, play in order
+    queue = queue.then(async () => {
+      const blob = await audio;
+      if (gen !== generation) return;
+      await (blob ? playBlob(blob) : speakBrowser(text));
+    });
+  }
+
+  // ---------- speech in ----------
   function handleFinal(text) {
     text = text.trim();
     if (!text) return;
     onHeard(text);
     if (ptt) { pttText += ' ' + text; return; }
-    if (speechSynthesis.speaking) return;            // don't hear Jarvis talking to himself
+    if (isSpeaking()) return;                        // don't hear Jarvis talking to himself
     const m = text.match(WAKE);
     if (m) {
       const rest = text.slice(m[0].length).trim();
@@ -79,5 +174,5 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     }
   }
 
-  return { start, stop, speak, pushToTalk, supported: !!SR };
+  return { start, stop, speak, preload, pushToTalk, isSpeaking, supported: !!SR };
 }
