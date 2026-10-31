@@ -11,18 +11,18 @@ let asking = false, askToken = 0, latest = null, resetting = false;
 // ---------- live feed ----------
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
-function showLatest(entry) {
+function showLatest(entry, { linked = true } = {}) {
   latest = entry;
   const path = entry && safeFrameUrl(entry.url, location.origin);
   $('frameChip').textContent = `FRAMES ${entry ? parseInt(entry.id.replace(/\D/g, ''), 10) + 1 : 0}`;
-  $('linkChip').textContent = 'LINK OK'; $('linkChip').classList.add('ok'); $('linkChip').classList.remove('bad');
+  if (linked) { $('linkChip').textContent = 'LINK OK'; $('linkChip').classList.add('ok'); $('linkChip').classList.remove('bad'); }
   if (!path) {
-    $('live').hidden = true; $('idle').hidden = false;
+    if (!previewLive()) { $('live').hidden = true; $('idle').hidden = false; }
     $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren();
     $('scanState').textContent = 'STANDBY'; $('scanState').classList.remove('busy'); $('age').textContent = '—'; return;
   }
   const src = `${path}?v=${entry.ts}`;
-  if ($('live').getAttribute('src') !== src) $('live').src = src;
+  if (!previewLive() && $('live').getAttribute('src') !== src) $('live').src = src;
   $('live').hidden = false; $('idle').hidden = true;
   $('age').textContent = formatSeenAt(entry.ts).toUpperCase();
   const c = entry.caption;
@@ -34,6 +34,47 @@ function showLatest(entry) {
     ...(c.objects || []).slice(0, 6).map(o => el('span', 'tag obj', o)),
     ...(c.landmarks || []).slice(0, 4).map(l => el('span', 'tag mark', l)),
   );
+}
+
+// ---------- live preview (~5 fps from the phone, display only) ----------
+let previewAt = 0, previewUrl = null, previewTimer = null, previewController = null;
+let previewWanted = false, previewGeneration = 0;
+const previewLive = () => Date.now() - previewAt < 1500;
+function stopPreview() {
+  previewWanted = false; previewGeneration++; clearTimeout(previewTimer); previewController?.abort();
+  previewController = null; previewAt = 0;
+  if (previewUrl) URL.revokeObjectURL(previewUrl);
+  previewUrl = null; $('liveChip').hidden = true;
+}
+function startPreview() {
+  if (previewWanted) return;
+  previewWanted = true; void pollPreview(++previewGeneration);
+}
+async function pollPreview(token) {
+  if (!previewWanted || token !== previewGeneration) return;
+  const controller = new AbortController(); previewController = controller;
+  const timeout = setTimeout(() => controller.abort(), 2000);
+  try {
+    const response = await fetch('/preview.jpg', { cache: 'no-store', signal: controller.signal });
+    if (response.status === 200) {
+      const blob = await response.blob();
+      if (!previewWanted || token !== previewGeneration) return;
+      if (blob.type.startsWith('image/')) {
+        const url = URL.createObjectURL(blob);
+        $('live').src = url; $('live').hidden = false; $('idle').hidden = true;
+        if (previewUrl) URL.revokeObjectURL(previewUrl);
+        previewUrl = url; previewAt = Date.now();
+      }
+    }
+  } catch { /* fall back to the last saved snapshot */ }
+  finally {
+    clearTimeout(timeout);
+    if (previewWanted && token === previewGeneration) {
+      previewController = null; $('liveChip').hidden = !previewLive();
+      if (!previewLive()) showLatest(latest, { linked: false });
+      previewTimer = setTimeout(() => pollPreview(token), previewLive() ? 150 : 1000);
+    }
+  }
 }
 
 const poller = createLatestPoller({
@@ -123,7 +164,7 @@ $('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) retu
 async function reset() {
   if (resetting) return;
   resetting = true; askToken++; asking = false;
-  document.body.classList.remove('thinking'); poller.stop(); voice.stop();
+  document.body.classList.remove('thinking'); poller.stop(); stopPreview(); voice.stop();
   $('q').disabled = true; $('askForm').querySelector('button').disabled = true;
   $('evidence').hidden = true;
   document.querySelectorAll('.line.pending').forEach(line => { line.classList.remove('pending'); line.textContent = 'JARVIS Question cancelled by memory reset.'; });
@@ -136,15 +177,15 @@ async function reset() {
   } catch (error) { toast('RESET FAILED'); console.error(error); }
   finally {
     resetting = false; $('q').disabled = false; $('askForm').querySelector('button').disabled = false;
-    poller.start(); if (started && !document.hidden) voice.start();
+    poller.start(); startPreview(); if (started && !document.hidden) voice.start();
   }
 }
 
-window.addEventListener('pagehide', () => { poller.stop(); voice.stop(); });
-window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); started = false; } });
+window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); voice.stop(); });
+window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); startPreview(); started = false; } });
 window.addEventListener('blur', () => voice.pushToTalk(false));
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }
 
-poller.start();
+poller.start(); startPreview();
 if (!voice.supported) $('micChip').textContent = MIC.unsupported;

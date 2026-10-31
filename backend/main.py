@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, Response, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -64,6 +64,25 @@ async def ask(body: Ask):
         return {"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}
 
 
+# Live preview: the phone sends small frames ~5x/second. Kept in memory only:
+# never captioned, never saved, never seen by Jarvis. The HUD shows it as "live video".
+_preview: dict = {"jpeg": None, "ts": 0.0}
+
+
+@app.post("/preview")
+async def preview(image: UploadFile = File(...)):
+    _preview["jpeg"] = await image.read()
+    _preview["ts"] = time.time()
+    return {"ok": True}
+
+
+@app.get("/preview.jpg")
+def preview_jpg():
+    if not _preview["jpeg"] or time.time() - _preview["ts"] > 3:
+        return Response(status_code=204)  # no fresh preview: the HUD falls back to /latest
+    return Response(_preview["jpeg"], media_type="image/jpeg", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/latest")
 def latest():
     return store.latest()
@@ -77,6 +96,7 @@ def full_log():
 @app.post("/reset")
 def reset():
     store.reset()
+    _preview["jpeg"] = None
     return {"ok": True}
 
 

@@ -38,6 +38,14 @@ Response `200`:
 For `retrace`, `frames` is ordered from **now back to the target** (the
 breadcrumbs to walk). For `find`, the first frame is the best match.
 
+## POST /preview  ·  GET /preview.jpg
+
+Live preview for the HUD, separate from `/frame`. While capturing, the phone sends a
+small JPEG (`image`, ~480px, low quality) about 5 times a second. The backend keeps only
+the newest one **in memory**: it is never captioned, saved, or seen by Jarvis.
+`GET /preview.jpg` returns it, or `204` if nothing arrived in the last 3s (the HUD then
+falls back to `/latest`). `POST /reset` clears it.
+
 ## GET /latest
 
 Returns the newest `LogEntry`, or `null` if nothing has been captured yet. The

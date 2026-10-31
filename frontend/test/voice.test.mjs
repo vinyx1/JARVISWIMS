@@ -21,3 +21,8 @@ test('permission denial stays visible after recognition ends',()=>{
 test('push-to-talk stops speech output and submits once after release',async()=>{
  const {voice,instances,questions,synth}=setup();voice.start();synth.speaking=true;voice.pushToTalk(true);assert.equal(synth.speaking,false);instances[0].emit('where are the keys');voice.pushToTalk(false);voice.pushToTalk(false);await new Promise(r=>setTimeout(r,950));assert.deepEqual(questions,['where are the keys']);voice.stop();
 });
+test('stopped and superseded recognizers cannot submit late final results',()=>{
+ const {voice,instances,questions}=setup();voice.start();const old=instances[0];voice.stop();old.emit('Jarvis, find the helmet');
+ assert.deepEqual(questions,[]);voice.start();old.emit('Jarvis, find the old keys');assert.deepEqual(questions,[]);
+ instances.at(-1).emit('Jarvis, find the new keys');assert.deepEqual(questions,['find the new keys']);voice.stop();
+});

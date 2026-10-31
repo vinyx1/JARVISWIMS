@@ -46,21 +46,24 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     if (!SR) { onState('unsupported'); return; }
     if (rec) return;
     rec = new SR();
+    const recognition = rec;
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = 'en-US';
     rec.onresult = e => {
+      if (!wanted || rec !== recognition) return;
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
         if (r.isFinal) handleFinal(r[0].transcript);
         else onHeard(r[0].transcript, true);
       }
     };
-    rec.onstart = () => onState(ptt ? 'ptt' : 'listening');
+    rec.onstart = () => { if (wanted && rec === recognition) onState(ptt ? 'ptt' : 'listening'); };
     rec.onerror = e => {
+      if (rec !== recognition) return;
       if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wanted = false; blocked = true; clearTimeout(restartTimer); onState('denied'); }
     };
-    rec.onend = () => { rec = null; if (wanted) restartTimer = setTimeout(() => { if (wanted) connect(); }, 250); else onState(blocked ? 'denied' : 'off'); };
+    rec.onend = () => { if (rec !== recognition) return; rec = null; if (wanted) restartTimer = setTimeout(() => { if (wanted) connect(); }, 250); else onState(blocked ? 'denied' : 'off'); };
     try { rec.start(); } catch { /* already started */ }
   }
 
@@ -68,7 +71,10 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
   function stop() {
     wanted = false; blocked = false; ptt = false; pttText = ''; armedUntil = 0;
     clearTimeout(restartTimer); clearTimeout(releaseTimer); releaseTimer = null;
-    window.speechSynthesis?.cancel(); rec?.stop();
+    window.speechSynthesis?.cancel();
+    const previous = rec; rec = null;
+    if (previous?.abort) previous.abort(); else previous?.stop();
+    onState('off');
   }
 
   // Hold space: everything said until release is the question, no wake word needed.
