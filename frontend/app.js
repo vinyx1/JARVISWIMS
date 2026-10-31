@@ -217,7 +217,7 @@ const GREETING = 'Good evening, sir. All systems online, and at your service.';
 function boot() {
   if (started || resetting) return;
   started = true; document.body.classList.remove('booting');
-  voice.preload(['Sir?', GREETING, ...FILLERS, LOST_LINK]);
+  voice.preload([GREETING, 'Sir?', ...FILLERS, LOST_LINK]);   // greeting first: it is spoken right away
   voice.start(); voice.speak(GREETING);
 }
 document.addEventListener('click', boot);
