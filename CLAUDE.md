@@ -69,8 +69,15 @@ photos of the demo route, in walking order (`01.jpg`…), and
     matching photo, and a breadcrumb strip.
 - **Voice input: wake word "Jarvis".** The laptop listens all the time (Chrome
   `webkitSpeechRecognition`, continuous, restarted on `onend`). When a final
-  transcript starts with "jarvis", send the rest to `POST /ask`. Keep a typed
-  input box as a fallback.
+  transcript starts with "jarvis", send the rest to `POST /ask`. Fallbacks, in
+  order: **hold the spacebar** to force-listen, then a typed input box. The venue will be loud.
+- **Filler line:** the instant a question is heard, Jarvis says something like
+  "Checking the footage, sir" and the HUD shows a scanning animation while
+  `/ask` runs. If answers still take longer than ~5s at 12:30, switch answering to Haiku.
+- **Captions run in the background:** `/frame` saves instantly, and the HUD shows
+  the photo with "ANALYZING…" until the caption arrives (see `API.md`).
+- **Hidden reset:** pressing **R** on the HUD calls `POST /reset` and clears the
+  screen. Do it before every rehearsal, or Jarvis finds the helmet from the last run.
 - **Voice output:** browser `speechSynthesis` with a British voice (prefer
   "Daniel"; otherwise any `en-GB` voice). No paid text-to-speech service.
 - **Hero feature: find a lost item.** Retrace (walking back past landmarks) is
