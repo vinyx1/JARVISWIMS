@@ -68,7 +68,27 @@ for _ in $(seq 30); do
 done
 
 caffeinate -dimsu & PIDS+=($!)
-open -a "Google Chrome" "http://localhost:$PORT" 2>/dev/null || open "http://localhost:$PORT"
+# Reuse an open HUD tab (reload it) instead of stacking duplicates that fight over the mic.
+found=$(osascript 2>/dev/null <<OSA
+tell application "Google Chrome"
+  set n to 0
+  repeat with w in windows
+    repeat with t in tabs of w
+      if URL of t starts with "http://localhost:$PORT" then
+        if n is 0 then
+          reload t
+        else
+          close t
+        end if
+        set n to n + 1
+      end if
+    end repeat
+  end repeat
+  return n
+end tell
+OSA
+)
+[[ "${found:-0}" -gt 0 ]] || open -a "Google Chrome" "http://localhost:$PORT" 2>/dev/null || open "http://localhost:$PORT"
 
 echo
 c "1;32" "  iPhone →  $URL/capture.html"
