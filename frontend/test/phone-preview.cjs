@@ -15,8 +15,15 @@ let browser;
    await new Promise(resolve=>setTimeout(resolve,350));active--;await route.fulfill({json:{ok:true}}).catch(()=>{});
  });
  await page.goto((process.env.HUD_URL||'http://127.0.0.1:8000')+'/capture.html');
+ assert.equal(await page.locator('#phoneMenu').getAttribute('open'),null,'phone controls should start collapsed');
+ await page.locator('#phoneMenu > summary').click();
  await page.getByRole('button',{name:'Start capture',exact:true}).click();await page.getByText('Snapshot saved. The laptop is analyzing it.',{exact:true}).waitFor();
+ await page.locator('#phoneMenu > summary').click();
+ assert.ok(await page.locator('#phoneVideo').evaluate(v=>!!v.srcObject),'closing the menu must not stop the camera');
+ for(const viewport of [{width:390,height:844},{width:844,height:390},{width:320,height:568}]){await page.setViewportSize(viewport);const menu=await page.locator('#phoneMenu').boundingBox();assert.ok(menu.height<=60,'collapsed menu must stay compact');assert.ok(menu.x>=0&&menu.x+menu.width<=viewport.width+1);assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false);}
+ if(process.env.SCREENSHOT_PATH)await page.screenshot({path:process.env.SCREENSHOT_PATH});
  await page.waitForTimeout(1800);
+ await page.locator('#phoneMenu > summary').click();
  assert.ok(requests>=5,'preview should keep uploading independently of saved frames');assert.ok(maxActive>=2&&maxActive<=5,'preview overlap must be bounded at 5');
  assert.equal(timestamps.length,requests,'every preview must carry a timestamp');assert.ok(timestamps.every(ts=>Number.isFinite(ts)&&ts>0));
  const encodes=await page.evaluate(()=>window.previewEncodes);assert.ok(encodes.some(x=>x.width===360&&x.quality===.45));assert.ok(encodes.some(x=>x.width===640));
