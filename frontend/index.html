@@ -24,21 +24,9 @@
     <svg class="chrome" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true">
       <path d="M40 120V40H140M1460 40H1560V120M40 780V860H140M1560 780V860H1460"/>
     </svg>
-    <div class="sweep" aria-hidden="true"></div>
-
-    <!-- arc reactor: idle spin, gold pulse while listening, fast spin while thinking, glows with the voice -->
-    <svg class="reactor" viewBox="-200 -200 400 400" aria-hidden="true">
-      <circle class="r-halo" r="150"/>
-      <circle class="r-ticks spin" r="132"/>
-      <path class="r-arc spin rev" d="M0 -112 A112 112 0 0 1 97 56"/>
-      <path class="r-arc2 spin rev" d="M-97 56 A112 112 0 0 1 -60 -95"/>
-      <circle class="r-inner" r="70"/>
-      <circle class="r-core" r="22"/>
-      <path class="r-cross" d="M-190 0H-160M160 0H190M0 -190V-160M0 160V190"/>
-    </svg>
-
     <header class="top">
-      <div class="brand">J.A.R.V.I.S.</div>
+      <!-- small core: gold while listening, blinks while thinking, glows with Jarvis's voice -->
+      <div class="brand"><span class="core" aria-hidden="true"></span>J.A.R.V.I.S.</div>
       <div class="chips">
         <span class="k">ROOM</span><span id="room" class="v">—</span>
         <span class="k">FRAME</span><span id="frameChip" class="v">—</span>
