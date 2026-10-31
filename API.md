@@ -49,6 +49,18 @@ description. The HUD shows it as `REGISTERED · MY <ITEM>`.
   "frames": [ { "id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000, "note": "silver MacBook with a pumpkin sticker" } ] }
 ```
 
+Any frame may also carry an optional `box: [x0, y0, x1, y1]`, the item's position as
+fractions (0–1) of the photo's width and height, from `ai.locate_object`. The HUD draws it
+as a gold outline. A missing box just means no outline; `JARVIS_BOX=0` turns boxes off.
+
+## POST /speak
+
+```json
+{ "text": "Very good, sir." }
+```
+Returns `200 audio/mpeg` in Jarvis's ElevenLabs voice, or `204` when it can't (no
+`ELEVENLABS_API_KEY`, slow, or failed). On `204` the HUD speaks with the browser's British voice.
+
 ## GET /mine
 
 The registered items, oldest first. Cleared by `POST /reset`.
