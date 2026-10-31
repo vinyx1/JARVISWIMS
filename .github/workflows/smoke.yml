@@ -1,0 +1,57 @@
+# Runs scripts/smoke.py on every PR and every push to main. Owner: Vince (B).
+# A red ❌ on the PR means: don't merge.
+name: smoke
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+concurrency:
+  group: smoke-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      # Repo secret. Without it the AI calls fail, and Kenny's and Paul's code
+      # must fall back safely, so the contract is still checked.
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: backend/requirements.txt
+
+      - name: Install
+        run: pip install -r backend/requirements.txt
+
+      - name: Pick test photos
+        id: photos
+        run: |
+          if ls samples/*.jpg samples/*.jpeg samples/*.png >/dev/null 2>&1; then
+            echo "folder=samples" >> "$GITHUB_OUTPUT"
+          else
+            echo "::warning::samples/ has no photos yet; using placeholder frames (checks the contract only)"
+            mkdir -p /tmp/placeholder
+            for i in 1 2 3; do printf '\xff\xd8\xff\xd9' > /tmp/placeholder/$i.jpg; done
+            echo "folder=/tmp/placeholder" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Start backend
+        run: |
+          nohup uvicorn main:app --app-dir backend --port 8000 > server.log 2>&1 &
+          for i in $(seq 30); do curl -sf localhost:8000/latest >/dev/null && exit 0; sleep 1; done
+          echo "backend did not start"; cat server.log; exit 1
+
+      - name: Smoke test
+        run: python scripts/smoke.py "${{ steps.photos.outputs.folder }}"
+
+      - name: Server log
+        if: always()
+        run: cat server.log
