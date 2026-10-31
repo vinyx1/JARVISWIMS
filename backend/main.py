@@ -1,5 +1,6 @@
 """FastAPI app. Owner: Vince (B). Implements the contract in API.md."""
 import asyncio
+import copy
 import inspect
 import logging
 import os
@@ -161,12 +162,12 @@ async def _answer_request(body: Ask):
     try:
         item = remember_item(body.question)
         if item:
-            return await _add_boxes(await _remember(item))
+            return await _remember(item)
         captioned = [e for e in store.read_log() if e["caption"]]
         result = await asyncio.wait_for(
             asyncio.to_thread(_with_mine, answer.answer, body.question, captioned), timeout=ASK_TIMEOUT_S
         )
-        return await _add_boxes(result)
+        return result
     except asyncio.TimeoutError:
         log.warning("/ask timed out after %ss: %r", ASK_TIMEOUT_S, body.question)
         return {"answer": "My apologies, sir, the footage is taking longer than expected. Ask me again in a moment.",
@@ -181,6 +182,21 @@ _exchange = None
 _exchange_generation = 0
 _ask_inflight = 0
 _interaction_lock = threading.Lock()
+_box_tasks: set = set()   # keep references so background box tasks aren't garbage-collected
+
+
+async def _box_later(exchange_id: str, generation: int, result: dict) -> None:
+    """Answer first, outline later: find the gold boxes after /ask has replied, so Jarvis starts talking
+    ~1-2s sooner. The HUD sees boxed=True on the same exchange and draws the outline."""
+    global _exchange
+    try:
+        boxed = await _add_boxes(copy.deepcopy(result))
+    except Exception:
+        log.exception("background locate_object failed")
+        return
+    with _interaction_lock:
+        if generation == _exchange_generation and _exchange and _exchange["id"] == exchange_id:
+            _exchange = {**_exchange, "result": boxed, "boxed": True}
 
 
 @app.post("/ask")
@@ -192,9 +208,15 @@ async def ask(body: Ask):
     try:
         result = await _answer_request(body)
         with _interaction_lock:
-            if generation == _exchange_generation:
-                _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result,
-                             "speak_on": body.speak_on}
+            stored = generation == _exchange_generation
+            if stored:
+                exchange_id = uuid.uuid4().hex
+                _exchange = {"id": exchange_id, "question": body.question, "result": result,
+                             "speak_on": body.speak_on, "boxed": False}
+        if stored:
+            task = asyncio.create_task(_box_later(exchange_id, generation, result))
+            _box_tasks.add(task)
+            task.add_done_callback(_box_tasks.discard)
         return result
     finally:
         with _interaction_lock:
