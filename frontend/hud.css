@@ -159,3 +159,50 @@ body:not(.booting) .engage { display: none; }
 @media (prefers-reduced-motion: reduce) {
   .engage, .objects li, .evidence, .line.pending, body.thinking .core, body.thinking .scan-state { animation: none; }
 }
+
+/* =================== Hologram (design B, picked from the mockups) ===================
+   Panels are projected light: cyan line + gradient fill + glow, tilted in 3D toward the
+   center. No glass band: the header is glowing type over a soft shade. */
+:root { --holo: "Oxanium", "Avenir Next", sans-serif; --arc: #5fe7ff; --arc-glow: rgba(95, 231, 255, .8); }
+body { font-family: var(--holo); }
+.stage { perspective: 95cqw; }
+
+.top { background: linear-gradient(180deg, rgba(0, 0, 0, .62), rgba(0, 0, 0, 0)); backdrop-filter: none; -webkit-backdrop-filter: none;
+  border-bottom: 0; padding: 1.5cqw 2.6cqw 3.2cqw; }
+.brand { flex: 1; }
+.brand::after { content: ""; flex: 1; height: 1px; min-width: 2cqw; background: linear-gradient(90deg, rgba(95, 231, 255, .85), rgba(95, 231, 255, 0)); }
+.name { font: 700 1.5cqw/1 var(--holo); letter-spacing: .35em; text-shadow: 0 0 .7cqw var(--arc-glow); }
+.scan-state, .ear { font-family: var(--holo); border-left: 0; padding-left: 0; }
+.chips { font-family: var(--holo); gap: .6cqw 1.6cqw; text-shadow: 0 0 .5cqw rgba(95, 231, 255, .45); }
+.chip { border: 0; padding: 0; border-radius: 0; }
+.chip.ok { color: var(--arc); }
+
+.card { border-radius: 0; border: 1px solid rgba(95, 231, 255, .55);
+  background: linear-gradient(135deg, rgba(95, 231, 255, .15), rgba(95, 231, 255, .03));
+  backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);
+  box-shadow: 0 0 2cqw rgba(95, 231, 255, .22), inset 0 0 1.5cqw rgba(95, 231, 255, .1); }
+.label { font-family: var(--holo); font-weight: 500; letter-spacing: .4em; color: rgba(95, 231, 255, .78); }
+
+.side.left { perspective: 70cqw; top: 8.5cqw; }
+.side.left .card { transform: rotateY(20deg); transform-origin: left center; }
+.objects li { font: 300 1.2cqw/1.45 var(--holo); color: #dff9ff; text-shadow: 0 0 .6cqw rgba(95, 231, 255, .6); }
+.objects li::before { flex-basis: .9cqw; height: 1px; border: 0; background: var(--arc); transform: translateY(-.35cqw); }
+.objects li.obj { color: #ffe3a6; text-shadow: 0 0 .6cqw rgba(255, 195, 90, .55); }
+.objects li.obj::before { background: var(--gold); }
+.my-items li strong { font-family: var(--holo); }
+
+.evidence { top: 8cqw; width: 30cqw; transform: rotateY(-16deg); transform-origin: right center;
+  border-color: rgba(255, 195, 90, .65); background: linear-gradient(225deg, rgba(255, 195, 90, .12), rgba(95, 231, 255, .04));
+  box-shadow: 0 0 2.4cqw rgba(255, 195, 90, .22), inset 0 0 1.5cqw rgba(255, 195, 90, .08); animation: holo-in .6s cubic-bezier(.2, .8, .2, 1) both; }
+#evidenceTitle { color: var(--gold); text-shadow: 0 0 .6cqw rgba(255, 195, 90, .6); }
+.hero-media { box-shadow: 0 0 0 1px rgba(255, 195, 90, .6), 0 0 1.4cqw rgba(255, 195, 90, .25); }
+.hero figcaption { font: 300 1.15cqw/1.35 var(--holo); color: #fff2d6; }
+.trail li, .candidate-option { font-family: var(--holo); }
+
+.subs, .ask { border-radius: 0; background: linear-gradient(135deg, rgba(95, 231, 255, .14), rgba(5, 8, 11, .7)); }
+.line.jarvis, .sub-a { font-family: var(--holo); font-weight: 300; }
+.engage, .idle p { font-family: var(--holo); }
+
+@keyframes holo-in { from { opacity: 0; transform: rotateY(-42deg) translateX(4cqw); } }
+@media (max-width: 900px) { .side.left .card, .evidence { transform: none; } }
+@media (prefers-reduced-motion: reduce) { .evidence { animation: none; } }

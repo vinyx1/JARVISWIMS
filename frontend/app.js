@@ -81,7 +81,7 @@ async function pollPreview(token) {
     if (previewWanted && token === previewGeneration) {
       previewController = null; $('liveChip').hidden = !previewLive();
       if (!previewLive()) showLatest(latest, { linked: false });
-      previewTimer = setTimeout(() => pollPreview(token), previewLive() ? 70 : 1000);
+      previewTimer = setTimeout(() => pollPreview(token), previewLive() ? 45 : 1000);
     }
   }
 }

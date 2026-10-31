@@ -5,7 +5,7 @@ export function createCameraController({media,attach,onEnded=()=>{}}) {
   return {
     async start(deviceId) {
       stop(); const current=generation;
-      const video=deviceId?{deviceId:{exact:deviceId},width:{ideal:1280}}:{width:{ideal:1280}};
+      const video=deviceId?{deviceId:{exact:deviceId},width:{ideal:1280},height:{ideal:720}}:{width:{ideal:1280},height:{ideal:720}};
       const stream=await media.getUserMedia({video,audio:false});
       if(current!==generation) { release(stream); return null; }
       active=stream;
