@@ -100,3 +100,27 @@ body.thinking .arc { animation-duration: .6s; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @media (prefers-reduced-motion: reduce) { .scanline, .arc, .reticle, .scan-state { animation: none; } }
 @media (max-width: 900px) { .hud { grid-template-columns: 1fr; } body { overflow: auto; } }
+
+/* Keep controls and evidence usable on smaller rehearsal displays. */
+.ask input { min-width: 0; }
+.ask button:disabled, .ask input:disabled { opacity: .5; cursor: wait; }
+.ask button:focus-visible { outline: 2px solid var(--gold); outline-offset: 3px; }
+.hero img { object-fit: contain; background: #000; }
+@media (max-width: 900px) {
+  .top { flex-wrap: wrap; gap: 16px; }
+  .brand { flex-wrap: wrap; gap: 10px; font-size: 18px; }
+  .brand .sub { width: 100%; font-size: 9px; letter-spacing: .15em; }
+  .chips { flex-wrap: wrap; gap: 6px; }
+  .chip { font-size: 9px; letter-spacing: .08em; }
+  .hud { flex: none; padding: 14px; gap: 14px; }
+  .viewport { min-height: 42vh; }
+  .overlay-top { left: 36px; right: 36px; top: 28px; gap: 8px; }
+  .overlay-top .tag { font-size: 8px; }
+  .scan-state { left: 36px; top: 67px; }
+  .overlay-bottom { left: 32px; right: 32px; }
+  .scene { font-size: 16px; }
+  .jarvis { min-height: 450px; }
+  .hero figcaption { position: static; }
+  .toast { max-width: 90vw; width: max-content; font-size: 12px; letter-spacing: .12em; }
+}
+@media (prefers-reduced-motion: reduce) { .line.pending { animation: none; } }
