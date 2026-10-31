@@ -22,6 +22,8 @@ DEFAULT_VOICE_ID = "wDsJlOXPqcvIUKdLXjDs"
 DEFAULT_MODEL = "eleven_v4_turbo"
 OUTPUT_FORMAT = "mp3_44100_128"
 MAX_CHARS = 600          # Jarvis replies are 2-3 sentences; this caps credit use
+# Variant C, picked by ear from an A/B/C test: low stability + high style = less flat, more Jarvis.
+VOICE_SETTINGS = {"stability": 0.2, "similarity_boost": 0.75, "style": 0.75, "use_speaker_boost": True, "speed": 0.92}
 TIMEOUT_S = 4.0          # past this, the browser voice is faster
 
 logger = logging.getLogger("uvicorn.error")
@@ -43,7 +45,8 @@ def synthesize(text: str | None, *, client: httpx.Client | None = None) -> bytes
             API_URL.format(voice_id=voice_id),
             params={"output_format": OUTPUT_FORMAT},
             headers={"xi-api-key": key},
-            json={"text": text, "model_id": os.getenv("ELEVENLABS_MODEL", DEFAULT_MODEL)},
+            json={"text": text, "model_id": os.getenv("ELEVENLABS_MODEL", DEFAULT_MODEL),
+                  "voice_settings": VOICE_SETTINGS},
         )
     except httpx.HTTPError as e:
         logger.warning("ElevenLabs request failed (%s); the browser voice will speak", type(e).__name__)

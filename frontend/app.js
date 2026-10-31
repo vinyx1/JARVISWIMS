@@ -8,7 +8,8 @@ import { createObjectOverlay } from './overlay.js';
 const $ = id => document.getElementById(id);
 const api = createApi({ timeoutMs: 15000 });
 const objectOverlay = createObjectOverlay($('heroImg'), $('objectOutline'));
-const FILLERS = ['Checking the footage, sir.', 'One moment, sir. Reviewing the suit cameras.', 'Scanning your recent movements, sir.'];
+const FILLERS = ['One moment, sir. Rewinding the footage.', 'Let me have a look, sir.', 'Consulting the suit cameras, sir.'];
+const LOST_LINK = "I'm afraid I've lost the suit cameras, sir. Do bear with me.";
 let asking = false, askToken = 0, latest = null, resetting = false;
 let rememberedItems = [], mineGeneration = 0, activeEvidence = null;
 
@@ -184,7 +185,7 @@ async function ask(question) {
   } catch (error) {
     if (token !== askToken) return;
     pending.remove();
-    const msg = "I'm afraid I've lost the connection to the suit cameras, sir.";
+    const msg = LOST_LINK;
     say('jarvis', msg); voice.speak(msg);
     console.error(error);
   } finally {
@@ -193,6 +194,7 @@ async function ask(question) {
 }
 
 // ---------- voice ----------
+let earTimer = null;   // clears the 'what the mic heard' line
 const MIC = { listening: 'MIC LIVE · SAY "JARVIS"', armed: 'LISTENING…', ptt: 'PUSH-TO-TALK', denied: 'MIC BLOCKED', unsupported: 'NO VOICE · TYPE', off: 'MIC OFF' };
 const voice = createVoice({
   onQuestion: ask,
@@ -202,17 +204,20 @@ const voice = createVoice({
     $('micChip').classList.toggle('hot', s === 'armed' || s === 'ptt');
     document.body.classList.toggle('listening', s === 'armed' || s === 'ptt');
   },
-  onHeard: (text, interim) => { $('heard').textContent = interim ? `… ${text}` : ''; },
+  onHeard: (text, interim) => {
+    $('heard').textContent = interim ? `… ${text}` : '';
+    $('ear').textContent = `“${text}”`; clearTimeout(earTimer); earTimer = setTimeout(() => ($('ear').textContent = ''), 2500);
+  },
   onLevel: level => document.documentElement.style.setProperty('--level', level.toFixed(3)),
 });
 
 // Chrome needs a user gesture before audio/mic: start on the first click or key press.
 let started = false;
-const GREETING = 'Good evening, sir. Ready when you are.';
+const GREETING = 'Good evening, sir. All systems online, and at your service.';
 function boot() {
   if (started || resetting) return;
   started = true; document.body.classList.remove('booting');
-  voice.preload(['Sir?', ...FILLERS, "I'm afraid I've lost the connection to the suit cameras, sir."]);
+  voice.preload(['Sir?', GREETING, ...FILLERS, LOST_LINK]);
   voice.start(); voice.speak(GREETING);
 }
 document.addEventListener('click', boot);
