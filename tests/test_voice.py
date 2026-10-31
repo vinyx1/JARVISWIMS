@@ -124,3 +124,16 @@ def test_rate_limit_is_retried_once():
     client = httpx.Client(transport=httpx.MockTransport(handler))
     assert voice.synthesize("Sir?", client=client) == MP3
     assert len(calls) == 2
+
+
+def test_gives_up_instead_of_queuing_forever_when_all_slots_are_busy(monkeypatch):
+    voice.clear_cache()
+    monkeypatch.setattr(voice, "SLOT_WAIT_S", 0.05)
+    held = [voice._slots.acquire() for _ in range(voice.MAX_CONCURRENT)]
+    try:
+        client, sent = fake_client()
+        assert voice.synthesize("Sir?", client=client) is None   # the HUD falls back; no thread stuck
+        assert sent == []
+    finally:
+        for _ in held:
+            voice._slots.release()
