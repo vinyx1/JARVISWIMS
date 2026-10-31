@@ -31,3 +31,15 @@ $('phoneStart').onclick=async()=>{
 $('phoneStop').onclick=stop;
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&(loop.running||opening||camera.stream)){stop();status('Capture paused because the page was hidden. Tap Start to resume.');}});
 window.addEventListener('pagehide',stop);controls();
+
+// Live preview for the HUD: small frames ~5x/second while capturing. Fire-and-forget:
+// a dropped preview frame never stops the real 3s capture loop.
+const PREVIEW_MS=200;let previewBusy=false;
+setInterval(async()=>{
+ if(!loop.running||previewBusy||document.hidden)return;
+ previewBusy=true;
+ try{
+  const frame=await captureFrame(video,{width:480,quality:.5});
+  if(frame){const body=new FormData();body.append('image',frame.blob,'p.jpg');await fetch('/preview',{method:'POST',body,signal:AbortSignal.timeout(2000)});}
+ }catch{}finally{previewBusy=false;}
+},PREVIEW_MS);

@@ -29,6 +29,7 @@ body {
 .chip { font-family: var(--hud-font); font-size: 11px; letter-spacing: .15em; padding: 6px 10px; border: 1px solid var(--line); color: var(--muted); }
 .chip.ok { color: var(--cyan); border-color: var(--cyan); }
 .chip.hot { color: var(--gold); border-color: var(--gold); box-shadow: 0 0 10px rgba(255,193,77,.4); }
+.chip.live { color: var(--red); border-color: var(--red); animation: blink 1.4s steps(2) infinite; }
 .chip.bad { color: var(--red); border-color: var(--red); }
 
 /* ---------- layout ---------- */
