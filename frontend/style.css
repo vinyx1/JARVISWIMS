@@ -982,3 +982,18 @@ progress {
   .phone-voice-controls { margin:10px 0 0; padding:0 0 0 16px; border-top:0; border-left:1px solid #acd5e533; }
   .phone-camera-controls { margin-top:4px; }
 }
+
+/* Compact dropdown keeps the camera unobstructed until controls are needed. */
+.phone-panel { display:block; top:calc(80px + env(safe-area-inset-top)); bottom:auto; max-height:calc(100% - 100px - env(safe-area-inset-top) - env(safe-area-inset-bottom)); padding:0; }
+.phone-menu-toggle { display:flex; align-items:center; justify-content:space-between; gap:14px; min-height:48px; padding:12px 16px; list-style:none; cursor:pointer; color:#eef9ff; font-size:13px; font-weight:500; -webkit-tap-highlight-color:transparent; }
+.phone-menu-toggle::-webkit-details-marker { display:none; }
+.phone-menu-chevron { font-size:20px; line-height:1; transition:transform .15s; }
+.phone-panel[open] .phone-menu-chevron { transform:rotate(180deg); }
+.phone-panel:not([open]) { left:auto; width:auto; max-width:none; border-radius:24px; }
+.phone-panel:not([open])>.phone-menu-content { display:none; }
+.phone-menu-content { padding:0 16px 16px; }
+@media (orientation:landscape) and (max-height:600px) {
+  .phone-panel { display:block; bottom:auto; }
+  .phone-menu-content { display:grid; grid-template-columns:minmax(0,1fr) minmax(0,1.2fr); gap:0 18px; }
+  .phone-panel[open] { max-width:660px; }
+}

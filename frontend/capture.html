@@ -17,11 +17,9 @@
       <a href="/">HUD ↗</a>
     </header>
     <span id="phoneBadge" class="live-label">CAMERA OFF</span>
-    <section class="phone-panel" aria-label="Camera controls">
-      <div class="phone-panel-heading">
-        <h1>Suit camera</h1>
-        <span class="phone-rotate">↻ Best held sideways</span>
-      </div>
+    <details id="phoneMenu" class="phone-panel">
+      <summary class="phone-menu-toggle">Camera &amp; voice <span class="phone-menu-chevron" aria-hidden="true">⌄</span></summary>
+      <div class="phone-menu-content">
       <div class="phone-camera-controls">
       <p id="phoneStatus" role="status">Camera is off. Tap Start to allow camera access.</p>
       <label class="field-label" for="phoneDevice">CAMERA SOURCE</label>
@@ -51,7 +49,8 @@
         <summary>Capture &amp; privacy</summary>
         <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. Voice uses this device’s microphone only after you tap Talk. Browser speech recognition may send audio to its speech service. Mute / cancel stops voice. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
       </details>
-    </section>
+      </div>
+    </details>
   </main>
   <script type="module" src="capture.js"></script>
 </body>
