@@ -5,7 +5,7 @@ const WAKE = /^\s*(?:hey|ok|okay)?\s*j[ae]rv[iu]s\b[\s,.!?]*/i;
 
 export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {} }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-  let rec = null, wanted = false, ptt = false, pttText = '', armedUntil = 0, voice = null;
+  let rec = null, wanted = false, ptt = false, pttText = '', armedUntil = 0, voice = null, restartTimer = null, releaseTimer = null, blocked = false;
 
   function pickVoice() {
     const voices = speechSynthesis.getVoices();
@@ -30,7 +30,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     if (!text) return;
     onHeard(text);
     if (ptt) { pttText += ' ' + text; return; }
-    if (speechSynthesis.speaking) return;            // don't hear Jarvis talking to himself
+    if (window.speechSynthesis?.speaking) return;            // don't hear Jarvis talking to himself
     const m = text.match(WAKE);
     if (m) {
       const rest = text.slice(m[0].length).trim();
@@ -41,9 +41,9 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     }
   }
 
-  function start() {
+  function connect() {
+    if (!wanted) return;
     if (!SR) { onState('unsupported'); return; }
-    wanted = true;
     if (rec) return;
     rec = new SR();
     rec.continuous = true;
@@ -58,23 +58,28 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     };
     rec.onstart = () => onState(ptt ? 'ptt' : 'listening');
     rec.onerror = e => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wanted = false; onState('denied'); }
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wanted = false; blocked = true; clearTimeout(restartTimer); onState('denied'); }
     };
-    rec.onend = () => { rec = null; if (wanted) setTimeout(start, 250); else onState('off'); };
+    rec.onend = () => { rec = null; if (wanted) restartTimer = setTimeout(() => { if (wanted) connect(); }, 250); else onState(blocked ? 'denied' : 'off'); };
     try { rec.start(); } catch { /* already started */ }
   }
 
-  function stop() { wanted = false; rec?.stop(); }
+  function start() { wanted = true; blocked = false; clearTimeout(restartTimer); connect(); }
+  function stop() {
+    wanted = false; blocked = false; ptt = false; pttText = ''; armedUntil = 0;
+    clearTimeout(restartTimer); clearTimeout(releaseTimer); releaseTimer = null;
+    window.speechSynthesis?.cancel(); rec?.stop();
+  }
 
   // Hold space: everything said until release is the question, no wake word needed.
   function pushToTalk(down) {
     if (!SR) return;
-    if (down && !ptt) { ptt = true; pttText = ''; onState('ptt'); start(); }
-    if (!down && ptt) {
-      setTimeout(() => {                                // let the last final result arrive
-        ptt = false; onState('listening');
+    if (down && !ptt) { clearTimeout(releaseTimer); releaseTimer = null; window.speechSynthesis?.cancel(); ptt = true; pttText = ''; onState('ptt'); start(); }
+    if (!down && ptt && releaseTimer === null) {
+      releaseTimer = setTimeout(() => {                                // let the last final result arrive
+        releaseTimer = null; ptt = false; onState(blocked ? 'denied' : wanted ? 'listening' : 'off');
         const q = pttText.replace(WAKE, '').trim();
-        if (q.length > 2) onQuestion(q);
+        if (wanted && q.length > 2) onQuestion(q);
       }, 900);
     }
   }

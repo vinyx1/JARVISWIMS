@@ -6,7 +6,7 @@ import { createVoice } from './voice.js';
 const $ = id => document.getElementById(id);
 const api = createApi({ timeoutMs: 15000 });
 const FILLERS = ['Checking the footage, sir.', 'One moment, sir. Reviewing the suit cameras.', 'Scanning your recent movements, sir.'];
-let asking = false, askToken = 0, latest = null;
+let asking = false, askToken = 0, latest = null, resetting = false;
 
 // ---------- live feed ----------
 function el(tag, cls, text) { const e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
@@ -19,14 +19,14 @@ function showLatest(entry) {
   if (!path) {
     $('live').hidden = true; $('idle').hidden = false;
     $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren();
-    $('scanState').textContent = 'STANDBY'; return;
+    $('scanState').textContent = 'STANDBY'; $('scanState').classList.remove('busy'); $('age').textContent = '—'; return;
   }
   const src = `${path}?v=${entry.ts}`;
   if ($('live').getAttribute('src') !== src) $('live').src = src;
   $('live').hidden = false; $('idle').hidden = true;
   $('age').textContent = formatSeenAt(entry.ts).toUpperCase();
   const c = entry.caption;
-  if (!c) { $('scanState').textContent = 'ANALYZING…'; $('scanState').classList.add('busy'); return; }
+  if (!c) { $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren(); $('scanState').textContent = 'ANALYZING…'; $('scanState').classList.add('busy'); return; }
   $('scanState').textContent = 'SCANNING'; $('scanState').classList.remove('busy');
   $('room').textContent = `ROOM ${(c.room_guess || 'unknown').toUpperCase()}`;
   $('scene').textContent = c.scene || '';
@@ -71,8 +71,8 @@ function showEvidence(result) {
 
 async function ask(question) {
   question = question.trim();
-  if (!question || asking) return;
-  asking = true; const token = ++askToken;
+  if (!question || asking || resetting) return;
+  asking = true; const token = ++askToken; $('evidence').hidden = true;
   say('you', question);
   voice.speak(FILLERS[Math.floor(Math.random() * FILLERS.length)], { interrupt: true });
   const pending = say('jarvis', 'Reviewing footage…'); pending.classList.add('pending');
@@ -105,27 +105,44 @@ const voice = createVoice({
 
 // Chrome needs a user gesture before audio/mic: start on the first click or key press.
 let started = false;
-function boot() { if (started) return; started = true; voice.start(); voice.speak('Good evening, sir. Suit cameras online.'); }
+function boot() { if (started || resetting) return; started = true; voice.start(); voice.speak('Good evening, sir. Ready when you are.'); }
 document.addEventListener('click', boot);
 
 // ---------- keys + typed fallback ----------
 const typing = () => document.activeElement === $('q');
 document.addEventListener('keydown', async e => {
-  if (typing()) return;
+  if (typing() || resetting) return;
   boot();
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) voice.pushToTalk(true); }
-  if (e.key === 'r' || e.key === 'R') {
-    try {
-      await api.resetMemory();
-      askToken++; asking = false; document.body.classList.remove('thinking');
-      $('transcript').replaceChildren(); $('evidence').hidden = true; showLatest(null);
-      toast('MEMORY CLEARED');
-    } catch (err) { toast('RESET FAILED'); console.error(err); }
-  }
+  if ((e.key === 'r' || e.key === 'R') && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) await reset();
   if (e.key === 'Escape') $('evidence').hidden = true;
 });
 document.addEventListener('keyup', e => { if (!typing() && e.code === 'Space') voice.pushToTalk(false); });
-$('askForm').onsubmit = e => { e.preventDefault(); boot(); const q = $('q').value; $('q').value = ''; $('q').blur(); ask(q); };
+$('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) return; boot(); const q = $('q').value.trim(); if (!q) return; $('q').value = ''; $('q').blur(); ask(q); };
+
+async function reset() {
+  if (resetting) return;
+  resetting = true; askToken++; asking = false;
+  document.body.classList.remove('thinking'); poller.stop(); voice.stop();
+  $('q').disabled = true; $('askForm').querySelector('button').disabled = true;
+  $('evidence').hidden = true;
+  document.querySelectorAll('.line.pending').forEach(line => { line.classList.remove('pending'); line.textContent = 'JARVIS Question cancelled by memory reset.'; });
+  try {
+    const log = await api.getLog();
+    if (log.some(entry => entry.caption === null)) { toast('STOP CAPTURE · WAIT FOR ANALYSIS'); return; }
+    await api.resetMemory();
+    $('transcript').replaceChildren(); $('trail').replaceChildren(); $('heroImg').removeAttribute('src'); $('heard').textContent = ''; showLatest(null);
+    toast('MEMORY CLEARED');
+  } catch (error) { toast('RESET FAILED'); console.error(error); }
+  finally {
+    resetting = false; $('q').disabled = false; $('askForm').querySelector('button').disabled = false;
+    poller.start(); if (started && !document.hidden) voice.start();
+  }
+}
+
+window.addEventListener('pagehide', () => { poller.stop(); voice.stop(); });
+window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); started = false; } });
+window.addEventListener('blur', () => voice.pushToTalk(false));
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }
 
