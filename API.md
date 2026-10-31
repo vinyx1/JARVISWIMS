@@ -53,6 +53,21 @@ Any frame may also carry an optional `box: [x0, y0, x1, y1]`, the item's positio
 fractions (0–1) of the photo's width and height, from `ai.locate_object`. The HUD draws it
 as a gold outline. A missing box just means no outline; `JARVIS_BOX=0` turns boxes off.
 
+## GET /interaction
+
+Latest completed phone question and answer for the display-only laptop HUD, or `null`.
+The phone calls `/ask` and plays `/speak` on its own device. The HUD polls this endpoint
+about once a second and displays the question, answer and evidence without recording or speaking.
+
+```json
+{ "id": "unique-exchange-id", "question": "Where is my helmet?",
+  "result": { "answer": "On the chair, sir.", "kind": "find", "frames": [] } }
+```
+
+State is held in memory for one active demo, replaced on each completed `/ask`, and
+cleared on reset or server restart. Reset returns `409` while a question is in flight, so an old registration cannot complete across that reset.
+This is a latest-exchange relay, not a queue for multiple simultaneous users.
+
 ## POST /speak
 
 ```json

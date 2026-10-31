@@ -22,6 +22,7 @@
         <h1>Suit camera</h1>
         <span class="phone-rotate">↻ Best held sideways</span>
       </div>
+      <div class="phone-camera-controls">
       <p id="phoneStatus" role="status">Camera is off. Tap Start to allow camera access.</p>
       <label class="field-label" for="phoneDevice">CAMERA SOURCE</label>
       <select id="phoneDevice"><option value="">Rear camera (default)</option></select>
@@ -29,9 +30,26 @@
         <button id="phoneStart" class="button primary" type="button">Start capture</button>
         <button id="phoneStop" class="button secondary" type="button" disabled>Stop</button>
       </div>
+      </div>
+      <section class="phone-voice-controls" aria-label="Jarvis voice">
+        <h2>Talk to Jarvis</h2>
+        <p id="phoneVoiceStatus" role="status">Use this device's microphone and speaker.</p>
+        <div class="phone-talk-actions">
+          <button id="phoneTalk" class="button primary" type="button">Talk to Jarvis</button>
+          <button id="phoneVoiceOff" class="button secondary" type="button">Mute / cancel</button>
+        </div>
+        <p id="phoneHeard" class="phone-heard" aria-live="polite"></p>
+        <p id="phoneAnswer" class="phone-answer" aria-live="polite"></p>
+        <button id="phoneReplay" class="button secondary" type="button" hidden>Play reply</button>
+        <form id="phoneAskForm" class="phone-ask">
+          <label class="sr-only" for="phoneQuestion">Question for Jarvis</label>
+          <input id="phoneQuestion" placeholder="Or type a question…" autocomplete="off" maxlength="500">
+          <button class="button secondary" type="submit">Send</button>
+        </form>
+      </section>
       <details class="phone-info">
         <summary>Capture &amp; privacy</summary>
-        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
+        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. Voice uses this device’s microphone only after you tap Talk. Browser speech recognition may send audio to its speech service. Mute / cancel stops voice. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
       </details>
     </section>
   </main>

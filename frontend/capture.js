@@ -41,3 +41,29 @@ const preview=createPreviewSender({
  send:(blob,ts,signal)=>previewApi.uploadPreview(blob,ts,signal),
  canSend:()=>loop.running&&!document.hidden
 });
+
+// Phone owns voice; the laptop polls completed exchanges without recording or speaking.
+import {createPhoneConversation,createDeviceSpeaker} from './phone-voice.js';
+const questionApi=createApi({timeoutMs:25000});
+let lastReply='',playbackBlocked=false;
+const speaker=createDeviceSpeaker({onBlocked(){playbackBlocked=true;$('phoneVoiceStatus').textContent='Tap Play reply to allow audio, or read the answer below.';}});
+const voiceStates={ready:'Ready. Tap Talk for your next question.',listening:'Listening… speak, then pause. Tap again to finish.',thinking:'Checking the footage…',speaking:'Jarvis is replying on this device.',denied:'Microphone blocked. Allow access in browser settings, or type below.',unsupported:'Speech recognition is unavailable here. Type your question below.', 'no-speech':'No speech captured. Tap Talk to try again.', 'recognition-error':'Speech recognition failed. Try again or type below.',error:'Could not complete the question. Try again.',off:'Microphone and reply audio are off.'};
+const phoneVoice=createPhoneConversation({
+ Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
+ speaker,ask:question=>questionApi.askQuestion(question),
+ onState(state){
+   if(!(state==='ready'&&playbackBlocked))$('phoneVoiceStatus').textContent=voiceStates[state]||state;
+   $('phoneTalk').textContent=state==='listening'?'Finish speaking':'Talk to Jarvis';
+   const busy=state==='thinking'||state==='speaking';$('phoneTalk').disabled=busy;$('phoneAskForm').querySelector('button').disabled=busy;$('phoneReplay').disabled=busy;
+ },
+ onHeard(text){$('phoneHeard').textContent=`You: ${text}`;},
+ onAnswer(result){lastReply=result.answer;playbackBlocked=false;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
+ onError(error){$('phoneAnswer').textContent=error.message;}
+});
+$('phoneTalk').onclick=()=>{playbackBlocked=false;phoneVoice.listen();};
+$('phoneVoiceOff').onclick=()=>phoneVoice.cancel();
+$('phoneReplay').onclick=()=>{speaker.unlock();playbackBlocked=false;void speaker.play(lastReply);};
+$('phoneAskForm').onsubmit=e=>{e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question||phoneVoice.busy)return;$('phoneQuestion').value='';playbackBlocked=false;void phoneVoice.submit(question);};
+if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){$('phoneTalk').disabled=true;$('phoneVoiceStatus').textContent=voiceStates.unsupported;}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)phoneVoice.cancel();});
+window.addEventListener('pagehide',()=>phoneVoice.cancel());
