@@ -12,7 +12,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 import ai  # noqa: E402
 import store  # noqa: E402
 
-app = FastAPI(title="Echo")
+app = FastAPI(title="ghost-project")
 
 
 @app.post("/frame")

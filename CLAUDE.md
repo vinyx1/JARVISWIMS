@@ -1,7 +1,7 @@
-# Echo — the ghost of your last 10 minutes
+# (Name TBD) — the ghost of your last 10 minutes
 
 Halloween hackathon project (6 hours, 3 people, each using a coding agent).
-A phone worn on your head snaps a photo every ~3s. Echo, a ghost that has been
+A phone worn on your head snaps a photo every ~3s. A ghost (name TBD) that has been
 "haunting" you, remembers what you saw and answers "where's my jacket?" or
 "retrace my steps" with a spooky voice plus photo breadcrumbs.
 
