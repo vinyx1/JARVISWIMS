@@ -177,7 +177,8 @@ async function speakOnLaptop(text){
     const r=await fetch('/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
     if(r.ok&&r.headers.get('content-type')?.startsWith('audio/')){
       const url=URL.createObjectURL(await r.blob());laptopAudio=new Audio(url);laptopAudio.onended=()=>URL.revokeObjectURL(url);
-      await laptopAudio.play();return;
+      try{await laptopAudio.play();}catch(err){if(err?.name==='NotAllowedError')toast('CLICK THE HUD ONCE SO THE LAPTOP CAN SPEAK');}
+      return;
     }
   }catch{/* fall back to the browser voice */}
   if(window.speechSynthesis&&window.SpeechSynthesisUtterance){const u=new SpeechSynthesisUtterance(text);u.lang='en-GB';window.speechSynthesis.speak(u);}
@@ -188,7 +189,8 @@ const interactions=createLatestPoller({
     if(!exchange){interactionId=null;hideEvidence();return;}
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
-    if(laptopVoice&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
+    // The phone's 'Jarvis speaks on: the laptop' arrives with the exchange; V forces it on this laptop too.
+    if((exchange.speak_on==='laptop'||laptopVoice)&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
     firstExchange=false;
     say('you',exchange.question);say('jarvis',exchange.result.answer);
     showEvidence(exchange.result);

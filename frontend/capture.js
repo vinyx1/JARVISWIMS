@@ -57,7 +57,7 @@ const onLaptop=()=>$('phoneOutput').value==='laptop';
 const replySpeaker={unlock:()=>speaker.unlock(),stop:()=>speaker.stop(),play:text=>onLaptop()?Promise.resolve():speaker.play(text)};
 const phoneVoice=createPhoneConversation({
  Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- speaker:replySpeaker,ask:question=>questionApi.askQuestion(question),
+ speaker:replySpeaker,ask:question=>questionApi.askQuestion(question,{speak_on:onLaptop()?'laptop':'phone'}),
  onState(state){
    if(!(state==='ready'&&playbackBlocked))$('phoneVoiceStatus').textContent=voiceStates[state]||state;
    if(state==='speaking'&&onLaptop())$('phoneVoiceStatus').textContent='Jarvis is replying on the laptop.';
