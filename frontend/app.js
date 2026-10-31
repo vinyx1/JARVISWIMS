@@ -17,12 +17,12 @@ function showLatest(entry) {
   $('frameChip').textContent = `FRAMES ${entry ? parseInt(entry.id.replace(/\D/g, ''), 10) + 1 : 0}`;
   $('linkChip').textContent = 'LINK OK'; $('linkChip').classList.add('ok'); $('linkChip').classList.remove('bad');
   if (!path) {
-    $('live').hidden = true; $('idle').hidden = false;
+    if (!previewLive()) { $('live').hidden = true; $('idle').hidden = false; }
     $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren();
     $('scanState').textContent = 'STANDBY'; return;
   }
   const src = `${path}?v=${entry.ts}`;
-  if ($('live').getAttribute('src') !== src) $('live').src = src;
+  if (!previewLive() && $('live').getAttribute('src') !== src) $('live').src = src;
   $('live').hidden = false; $('idle').hidden = true;
   $('age').textContent = formatSeenAt(entry.ts).toUpperCase();
   const c = entry.caption;
@@ -35,6 +35,24 @@ function showLatest(entry) {
     ...(c.landmarks || []).slice(0, 4).map(l => el('span', 'tag mark', l)),
   );
 }
+
+// ---------- live preview (~5 fps from the phone, display only) ----------
+let previewAt = 0, previewUrl = null;
+const previewLive = () => Date.now() - previewAt < 1500;
+async function pollPreview() {
+  try {
+    const r = await fetch('/preview.jpg', { cache: 'no-store', signal: AbortSignal.timeout(2000) });
+    if (r.status === 200) {
+      const url = URL.createObjectURL(await r.blob());
+      $('live').src = url; $('live').hidden = false; $('idle').hidden = true;
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      previewUrl = url; previewAt = Date.now();
+    }
+  } catch { /* fall back to /latest snapshots */ }
+  $('liveChip').hidden = !previewLive();
+  setTimeout(pollPreview, previewLive() ? 150 : 1000);
+}
+pollPreview();
 
 const poller = createLatestPoller({
   load: () => api.getLatest(),
