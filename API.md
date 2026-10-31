@@ -14,10 +14,12 @@ Upload one camera frame. Send it as `multipart/form-data`:
 
 Response `200`:
 ```json
-{ "id": "f_000123", "caption": { ...Caption } }
+{ "id": "f_000123", "caption": null }
 ```
-Captioning happens synchronously. The frontend should not wait on the response
-before taking the next photo: fire and forget, and log errors.
+The frame is saved instantly, and captioning happens **in the background**:
+`caption` is `null` until it's ready (about 1–3s later), and then `/latest` and
+`/log` include it. The phone should fire and forget, and log errors.
+`/ask` only considers frames that have finished captioning.
 
 ## POST /ask
 
@@ -39,7 +41,9 @@ breadcrumbs to walk). For `find`, the first frame is the best match.
 ## GET /latest
 
 Returns the newest `LogEntry`, or `null` if nothing has been captured yet. The
-laptop HUD polls this about once a second to show the live feed.
+laptop HUD polls this about once a second to show the live feed. Its `caption`
+may still be `null`: show the photo immediately with "ANALYZING…", then the
+labels once the caption arrives.
 
 ## GET /log
 
@@ -59,5 +63,5 @@ type Caption = {
   landmarks: string[];   // fixed things useful for navigation: "red poster", "staircase"
 };
 
-type LogEntry = { id: string; ts: number; url: string; caption: Caption };
+type LogEntry = { id: string; ts: number; url: string; caption: Caption | null };
 ```
