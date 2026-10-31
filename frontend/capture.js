@@ -10,7 +10,7 @@ async function releaseWake(){const lock=wakeLock;wakeLock=null;if(lock)await loc
 function stop(){generation++;opening=false;loop.stop();preview.stop();camera.stop();void releaseWake();status('Capture stopped. Saved photos remain on the laptop.');controls();}
 const camera=createCameraController({media:{getUserMedia:constraints=>{
  const requested=$('phoneDevice').value;
- if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1280}};
+ if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}};
  return navigator.mediaDevices.getUserMedia(constraints);
 }},attach(stream){video.srcObject=stream;if(stream)video.play().catch(()=>{});},onEnded(){stop();status('Camera disconnected. Tap Start to reconnect.',true);}});
 const loop=createCaptureLoop({sample:()=>captureFrame(video),async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}catch(error){if(error.uncertain){uncertain=true;status(error.message,true);}throw error;}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error){preview.stop();status(error.message,true);controls();void releaseWake();}});
@@ -36,6 +36,7 @@ window.addEventListener('pagehide',stop);controls();
 // Up to three preview uploads may overlap through the tunnel; timestamps let the backend reject stale arrivals.
 const previewApi=createApi({timeoutMs:2000});
 const preview=createPreviewSender({
+ intervalMs:66, maxInFlight:5,   // ~15 fps target; the tunnel round trip is the real limit
  sample:()=>captureFrame(video,{width:360,quality:.45}),
  send:(blob,ts,signal)=>previewApi.uploadPreview(blob,ts,signal),
  canSend:()=>loop.running&&!document.hidden

@@ -57,10 +57,13 @@ let browser;
  await page.locator('#objectOutline').waitFor({state:'visible',timeout:3000});
  async function checkOutline(){
    return page.evaluate(()=>{
+     // The hologram tilts the evidence card in 3D; the outline shares the photo's plane, so measure it flat.
+     const ev=document.getElementById('evidence');ev.style.transform='none';ev.style.animation='none';
      const img=document.getElementById('heroImg'),box=img.getBoundingClientRect(),rect=document.querySelector('#objectOutline rect').getBoundingClientRect();
      const scale=Math.min(box.width/img.naturalWidth,box.height/img.naturalHeight);
      const left=box.left+(box.width-img.naturalWidth*scale)/2,top=box.top+(box.height-img.naturalHeight*scale)/2;
-     return Math.abs(rect.left-(left+.35*img.naturalWidth*scale))<1&&Math.abs(rect.top-(top+.33*img.naturalHeight*scale))<1&&Math.abs(rect.width-.16*img.naturalWidth*scale)<1&&Math.abs(rect.height-.20*img.naturalHeight*scale)<1;
+     const ok=Math.abs(rect.left-(left+.35*img.naturalWidth*scale))<1&&Math.abs(rect.top-(top+.33*img.naturalHeight*scale))<1&&Math.abs(rect.width-.16*img.naturalWidth*scale)<1&&Math.abs(rect.height-.20*img.naturalHeight*scale)<1;
+     ev.style.transform='';ev.style.animation='';return ok;
    });
  }
  for(const viewport of [{width:1440,height:900},{width:1280,height:720},{width:390,height:844}]){await page.setViewportSize(viewport);check(await checkOutline(),`selected object box is misaligned at ${viewport.width}`);}
