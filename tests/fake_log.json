@@ -1,0 +1,231 @@
+[
+ {
+  "id": "f_000000",
+  "ts": 1730400000000,
+  "url": "/frames/f_000000.jpg",
+  "caption": {
+   "scene": "Looking out from the stage at the crowd",
+   "room_guess": "stage",
+   "objects": [
+    "red Iron Man helmet in hand"
+   ],
+   "landmarks": [
+    "stage lights",
+    "black curtain"
+   ]
+  }
+ },
+ {
+  "id": "f_000001",
+  "ts": 1730400003000,
+  "url": "/frames/f_000001.jpg",
+  "caption": {
+   "scene": "Walking past the snack table",
+   "room_guess": "main hall",
+   "objects": [
+    "red Iron Man helmet in hand",
+    "paper cups"
+   ],
+   "landmarks": [
+    "snack table",
+    "orange tablecloth"
+   ]
+  }
+ },
+ {
+  "id": "f_000002",
+  "ts": 1730400006000,
+  "url": "/frames/f_000002.jpg",
+  "caption": {
+   "scene": "Snack table with candy bowls",
+   "room_guess": "main hall",
+   "objects": [
+    "candy bowl",
+    "black jacket on chair"
+   ],
+   "landmarks": [
+    "snack table",
+    "balloon arch"
+   ]
+  }
+ },
+ {
+  "id": "f_000003",
+  "ts": 1730400009000,
+  "url": "/frames/f_000003.jpg",
+  "caption": {
+   "scene": "blurry frame, camera moving fast",
+   "room_guess": "unknown",
+   "objects": [],
+   "landmarks": []
+  }
+ },
+ {
+  "id": "f_000004",
+  "ts": 1730400012000,
+  "url": "/frames/f_000004.jpg",
+  "caption": {
+   "scene": "Pumpkin display next to the tall windows",
+   "room_guess": "main hall",
+   "objects": [
+    "red Iron Man helmet in hand"
+   ],
+   "landmarks": [
+    "pumpkin display",
+    "tall windows"
+   ]
+  }
+ },
+ {
+  "id": "f_000005",
+  "ts": 1730400015000,
+  "url": "/frames/f_000005.jpg",
+  "caption": {
+   "scene": "Corridor leading toward the exit",
+   "room_guess": "hallway",
+   "objects": [
+    "red Iron Man helmet in hand"
+   ],
+   "landmarks": [
+    "red exit sign",
+    "water fountain"
+   ]
+  }
+ },
+ {
+  "id": "f_000006",
+  "ts": 1730400018000,
+  "url": "/frames/f_000006.jpg",
+  "caption": {
+   "scene": "Red Iron Man helmet resting on a grey chair beside the exit sign",
+   "room_guess": "hallway",
+   "objects": [
+    "red Iron Man helmet on grey chair"
+   ],
+   "landmarks": [
+    "red exit sign",
+    "grey chair",
+    "water fountain"
+   ]
+  }
+ },
+ {
+  "id": "f_000007",
+  "ts": 1730400021000,
+  "url": "/frames/f_000007.jpg",
+  "caption": {
+   "scene": "Walking away down the hallway",
+   "room_guess": "hallway",
+   "objects": [],
+   "landmarks": [
+    "water fountain",
+    "bulletin board"
+   ]
+  }
+ },
+ {
+  "id": "f_000008",
+  "ts": 1730400024000,
+  "url": "/frames/f_000008.jpg",
+  "caption": {
+   "scene": "Bulletin board covered in club flyers",
+   "room_guess": "hallway",
+   "objects": [
+    "blue water bottle on wooden bench"
+   ],
+   "landmarks": [
+    "bulletin board",
+    "wooden bench"
+   ]
+  }
+ },
+ {
+  "id": "f_000009",
+  "ts": 1730400027000,
+  "url": "/frames/f_000009.jpg",
+  "caption": {
+   "scene": "Turning the corner back into the main hall",
+   "room_guess": "main hall",
+   "objects": [],
+   "landmarks": [
+    "balloon arch",
+    "pumpkin display"
+   ]
+  }
+ },
+ {
+  "id": "f_000010",
+  "ts": 1730400030000,
+  "url": "/frames/f_000010.jpg",
+  "caption": {
+   "scene": "People gathered at the snack table",
+   "room_guess": "main hall",
+   "objects": [
+    "black jacket on chair"
+   ],
+   "landmarks": [
+    "snack table"
+   ]
+  }
+ },
+ {
+  "id": "f_000011",
+  "ts": 1730400033000,
+  "url": "/frames/f_000011.jpg",
+  "caption": {
+   "scene": "Photo booth with Halloween props",
+   "room_guess": "main hall",
+   "objects": [
+    "witch hat",
+    "phone on table"
+   ],
+   "landmarks": [
+    "photo booth",
+    "purple backdrop"
+   ]
+  }
+ },
+ {
+  "id": "f_000012",
+  "ts": 1730400036000,
+  "url": "/frames/f_000012.jpg",
+  "caption": {
+   "scene": "Walking toward the stage",
+   "room_guess": "main hall",
+   "objects": [],
+   "landmarks": [
+    "stage lights"
+   ]
+  }
+ },
+ {
+  "id": "f_000013",
+  "ts": 1730400039000,
+  "url": "/frames/f_000013.jpg",
+  "caption": {
+   "scene": "On the stage facing the audience",
+   "room_guess": "stage",
+   "objects": [],
+   "landmarks": [
+    "stage",
+    "black curtain"
+   ]
+  }
+ },
+ {
+  "id": "f_000014",
+  "ts": 1730400042000,
+  "url": "/frames/f_000014.jpg",
+  "caption": {
+   "scene": "Projector screen showing the HUD",
+   "room_guess": "stage",
+   "objects": [
+    "laptop on podium"
+   ],
+   "landmarks": [
+    "projector screen",
+    "stage"
+   ]
+  }
+ }
+]
