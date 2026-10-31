@@ -33,6 +33,7 @@ def fake_client(status=200, content=MP3, content_type="audio/mpeg", error=None):
 
 @pytest.fixture(autouse=True)
 def eleven_env(monkeypatch):
+    voice.clear_cache()
     monkeypatch.setenv("ELEVENLABS_API_KEY", "test-key")
     monkeypatch.delenv("ELEVENLABS_VOICE_ID", raising=False)
     monkeypatch.delenv("ELEVENLABS_MODEL", raising=False)
@@ -99,3 +100,27 @@ def test_network_error_returns_none():
 def test_timeout_returns_none():
     client, _ = fake_client(error=httpx.ReadTimeout("slow"))
     assert voice.synthesize("Sir?", client=client) is None
+
+
+def test_same_line_is_cached_so_repeated_fillers_cost_one_request():
+    voice.clear_cache()
+    client, sent = fake_client()
+    assert voice.synthesize("One moment, sir.", client=client) == MP3
+    assert voice.synthesize("One moment, sir.", client=client) == MP3
+    assert len(sent) == 1
+
+
+def test_rate_limit_is_retried_once():
+    voice.clear_cache()
+    calls = []
+
+    def handler(request):
+        calls.append(request)
+        if len(calls) == 1:
+            return httpx.Response(429, content=b'{"detail":"concurrent_limit_exceeded"}',
+                                  headers={"content-type": "application/json"})
+        return httpx.Response(200, content=MP3, headers={"content-type": "audio/mpeg"})
+
+    client = httpx.Client(transport=httpx.MockTransport(handler))
+    assert voice.synthesize("Sir?", client=client) == MP3
+    assert len(calls) == 2
