@@ -15,9 +15,10 @@ import time
 from pathlib import Path
 
 import httpx
+from photos import find_images
 
 p = argparse.ArgumentParser()
-p.add_argument("folder", nargs="?", default="samples")
+p.add_argument("folder", nargs="?", default="samples", help="scenario folder, e.g. samples/vince")
 p.add_argument("--url", default="http://localhost:8000")
 p.add_argument("--question", default="where did I leave my helmet?")
 p.add_argument("--timeout", type=float, default=60, help="seconds to wait for captions")
@@ -43,9 +44,7 @@ def valid_caption(c) -> bool:
     )
 
 
-images = sorted(f for f in Path(args.folder).iterdir() if f.suffix.lower() in {".jpg", ".jpeg", ".png"})
-if not images:
-    sys.exit(f"No images in {args.folder}/. Add the demo-route photos there first.")
+images = find_images(args.folder)
 
 with httpx.Client(base_url=args.url, timeout=60) as c:
     print(f"1. reset + upload {len(images)} frames to {args.url}")
