@@ -94,5 +94,16 @@ with httpx.Client(base_url=args.url, timeout=60) as c:
         print(f"  WARN  /ask took {took:.1f}s; above 5s, consider Haiku for answering")
     print(f"\n  Jarvis: {a.get('answer')}")
 
+    print("4. remember: 'this is my backpack, remember it'")
+    r = c.post("/ask", json={"question": "Jarvis, this is my backpack, remember it"})
+    m = r.json() if r.status_code == 200 else {}
+    check(m.get("kind") == "remember", f"kind is 'remember': {m.get('kind')!r}")
+    rf = m.get("frames") or []
+    check(len(rf) == 1 and all(k in rf[0] for k in ("id", "url", "ts", "note")), "one frame with id, url, ts, note")
+    mine = c.get("/mine").json()
+    check(len(mine) == 1 and mine[0].get("item") == "backpack", f"GET /mine has the backpack: {mine}")
+    check(c.post("/reset").status_code == 200 and c.get("/mine").json() == [], "POST /reset clears /mine")
+    print(f"\n  Jarvis: {m.get('answer')}")
+
 print(f"\n{'PASS' if not failures else f'FAIL ({len(failures)} problems)'}")
 sys.exit(1 if failures else 0)

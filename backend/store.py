@@ -11,14 +11,17 @@ from pathlib import Path
 DATA = Path(__file__).resolve().parent.parent / "data"
 FRAMES = DATA / "frames"
 LOG = DATA / "log.json"
+MINE = DATA / "mine.json"
 FRAMES.mkdir(parents=True, exist_ok=True)
 
 _lock = threading.Lock()
 _log: list[dict] = json.loads(LOG.read_text()) if LOG.exists() else []
+_mine: list[dict] = json.loads(MINE.read_text()) if MINE.exists() else []
 
 
 def _persist() -> None:
     LOG.write_text(json.dumps(_log))
+    MINE.write_text(json.dumps(_mine))
 
 
 def add_frame(jpeg: bytes, ts: float) -> dict:
@@ -51,9 +54,26 @@ def latest() -> dict | None:
         return dict(_log[-1]) if _log else None
 
 
+def remember(item: str, description: str, frame: dict) -> dict:
+    """Register one of sir's own items. Re-registering the same item replaces it."""
+    with _lock:
+        _mine[:] = [m for m in _mine if m["item"] != item]
+        entry = {"item": item, "description": description, "frame_id": frame["id"],
+                 "url": frame["url"], "ts": frame["ts"]}
+        _mine.append(entry)
+        _persist()
+        return dict(entry)
+
+
+def mine() -> list[dict]:
+    with _lock:
+        return [dict(m) for m in _mine]
+
+
 def reset() -> None:
     with _lock:
         _log.clear()
+        _mine.clear()
         shutil.rmtree(FRAMES, ignore_errors=True)
         FRAMES.mkdir(parents=True, exist_ok=True)
         _persist()

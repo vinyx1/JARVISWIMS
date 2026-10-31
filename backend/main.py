@@ -1,7 +1,9 @@
 """FastAPI app. Owner: Vince (B). Implements the contract in API.md."""
 import asyncio
+import inspect
 import logging
 import os
+import re
 import time
 from pathlib import Path
 
@@ -21,9 +23,16 @@ app = FastAPI(title="jarvis")
 ASK_TIMEOUT_S = float(os.getenv("ASK_TIMEOUT_S", "12"))
 
 
+def _with_mine(fn, *args):
+    """Call fn(*args, mine=...) once its owner has added the `mine` parameter; plain fn(*args) until then."""
+    if "mine" in inspect.signature(fn).parameters:
+        return fn(*args, mine=store.mine())
+    return fn(*args)
+
+
 def _caption_in_background(frame_id: str, jpeg: bytes) -> None:
     try:
-        store.set_caption(frame_id, ai.caption_frame(jpeg))
+        store.set_caption(frame_id, _with_mine(ai.caption_frame, jpeg))
     except Exception:
         log.exception("captioning %s failed", frame_id)
 
@@ -47,13 +56,76 @@ class Ask(BaseModel):
     question: str
 
 
+# ---------- "this is my laptop, remember it" ----------
+_ITEM = r"(?P<item>[a-z]+(?: [a-z]+){0,3})"
+_REMEMBER = [
+    re.compile(rf"\b(?:this|that|it)(?: is|'s| s) (?:my|mine) (?:own )?{_ITEM}"),   # this is my laptop
+    re.compile(rf"\b(?:this|that|the) {_ITEM} (?:is|'s| s) (?:mine|my own)\b"),     # this laptop is mine
+    re.compile(rf"\bremember (?:this|that|my) {_ITEM}"),                            # remember this laptop
+]
+_NOT_REMEMBER = re.compile(r"^\s*(?:where|did|do you|have you|what|when|which|how)\b")
+_STOP = {"remember", "please", "jarvis", "and", "so", "can", "could", "would", "will", "it", "for",
+         "now", "okay", "ok", "right", "here", "there", "is", "mine", "me", "you", "save", "keep", "track"}
+
+
+def remember_item(question: str) -> str | None:
+    """'Jarvis, this is my black laptop, remember it' -> 'black laptop'. None if not a remember request."""
+    q = re.sub(r"[^a-z' ]+", " ", question.lower()).replace("\u2019", "'")
+    q = re.sub(r"\s+", " ", q).strip()
+    if _NOT_REMEMBER.match(q):
+        return None
+    for pattern in _REMEMBER:
+        m = pattern.search(q)
+        if m:
+            words = m["item"].split()
+            for i, w in enumerate(words):  # cut at the first filler word: "laptop please remember it"
+                if w in _STOP:
+                    words = words[:i]
+                    break
+            if words:
+                return " ".join(words)
+    return None
+
+
+def _current_view() -> dict | None:
+    """What the camera sees right now, as a saved (and captioned) frame."""
+    if _preview["jpeg"] and time.time() - _preview["ts"] <= 3:
+        jpeg = _preview["jpeg"]
+        entry = store.add_frame(jpeg, time.time() * 1000)
+        asyncio.get_running_loop().run_in_executor(None, _caption_in_background, entry["id"], jpeg)
+        return entry
+    return store.latest()
+
+
+async def _remember(item: str) -> dict:
+    frame = _current_view()
+    if not frame:
+        return {"answer": "I can't see anything yet, sir. Start the camera and show it to me.",
+                "kind": "other", "frames": []}
+    jpeg = (store.FRAMES / f"{frame['id']}.jpg").read_bytes()
+    description = item
+    describe = getattr(ai, "describe_item", None)  # Kenny's; until it lands, the bare name
+    if describe:
+        try:
+            description = (await asyncio.wait_for(asyncio.to_thread(describe, jpeg, item), timeout=8)) or item
+        except Exception:
+            log.exception("describe_item(%r) failed", item)
+    store.remember(item, description, frame)
+    said = f"Noted, sir. I'll remember your {item}" + (f": {description}." if description != item else ".")
+    return {"answer": said, "kind": "remember",
+            "frames": [{"id": frame["id"], "url": frame["url"], "ts": frame["ts"], "note": description}]}
+
+
 @app.post("/ask")
 async def ask(body: Ask):
     """Never leave Jarvis silent on stage: time out or fail into an in-character reply."""
-    captioned = [e for e in store.read_log() if e["caption"]]
     try:
+        item = remember_item(body.question)
+        if item:
+            return await _remember(item)
+        captioned = [e for e in store.read_log() if e["caption"]]
         return await asyncio.wait_for(
-            asyncio.to_thread(answer.answer, body.question, captioned), timeout=ASK_TIMEOUT_S
+            asyncio.to_thread(_with_mine, answer.answer, body.question, captioned), timeout=ASK_TIMEOUT_S
         )
     except asyncio.TimeoutError:
         log.warning("/ask timed out after %ss: %r", ASK_TIMEOUT_S, body.question)
@@ -64,14 +136,24 @@ async def ask(body: Ask):
         return {"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}
 
 
-# Live preview: the phone sends small frames ~5x/second. Kept in memory only:
-# never captioned, never saved, never seen by Jarvis. The HUD shows it as "live video".
-_preview: dict = {"jpeg": None, "ts": 0.0}
+@app.get("/mine")
+def mine():
+    return store.mine()
+
+
+# Live preview: the phone sends small frames ~10x/second, several in flight. Kept in memory
+# only and never captioned, except when "remember this" saves the current view as a frame.
+_preview: dict = {"jpeg": None, "ts": 0.0, "client_ts": 0.0}
 
 
 @app.post("/preview")
-async def preview(image: UploadFile = File(...)):
-    _preview["jpeg"] = await image.read()
+async def preview(image: UploadFile = File(...), ts: float = Form(None)):
+    jpeg = await image.read()
+    if ts is not None:
+        if ts < _preview["client_ts"]:
+            return {"ok": True, "stale": True}  # an older frame arriving late: keep the newer one
+        _preview["client_ts"] = ts
+    _preview["jpeg"] = jpeg
     _preview["ts"] = time.time()
     return {"ok": True}
 
@@ -96,7 +178,7 @@ def full_log():
 @app.post("/reset")
 def reset():
     store.reset()
-    _preview["jpeg"] = None
+    _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
     return {"ok": True}
 
 
