@@ -924,3 +924,18 @@ progress {
     scroll-behavior:auto!important
   }
 }
+/* The phone feed is a timestamped snapshot, never mislabeled as live video. */
+.remote-frame { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.feed-status { font-size:10px; line-height:1.7; color:#a2ada8; min-height:17px; margin:10px 0 6px; }
+.capture-page-link { font-size:10px; color:var(--accent); text-underline-offset:4px; }
+.phone-capture { min-height:100dvh; }
+.capture-shell { max-width:520px; padding:26px 22px; margin:auto; }
+.capture-shell header { display:flex; align-items:center; justify-content:space-between; }
+.capture-shell header a { font-size:10px; color:var(--accent); text-decoration:none; }
+.capture-shell h1 { font-size:36px; font-weight:450; letter-spacing:-1.3px; line-height:1.15; margin:32px 0 16px; }
+.capture-shell>p { font-size:12px; color:#a4adb3; line-height:1.8; }
+.capture-shell .preview { margin:24px 0; }
+.capture-shell .capture-controls { max-width:none; margin:18px 0; }
+.capture-shell .button { min-height:52px; font-size:14px; }
+.capture-shell #phoneStatus { min-height:45px; }
+.capture-shell #phoneStatus.error { color:var(--danger); }

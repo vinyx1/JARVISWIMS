@@ -1,16 +1,20 @@
 # Frontend integration notes
 
-The frontend is implemented on `frontend/chat-camera`. It uses plain browser modules; no build step, frontend API keys or microphone access. Source files remain under `frontend/`. Existing backend files and shared API/team rules are unchanged.
+The frontend is implemented on `frontend/chat-camera`. It uses plain browser modules; no build step, frontend API keys or microphone access. Source files remain under `frontend/`. Vincent’s upstream changes through `84f3dd4` are merged; backend files and shared API/team rules are preserved exactly as upstream. Direct user requirements retain the chat-first, typing-only interface instead of the voice/full-screen HUD described in the updated repository plan.
 
 ## Preview and existing backend
 
 For a frontend-only preview, run `python3 -m http.server 8765 --bind 127.0.0.1 --directory frontend` from the repository root, then open http://127.0.0.1:8765. Camera selection works on supported secure/localhost origins; API calls show unavailable until a backend serves the same origin.
 
-For the integrated application, start the existing FastAPI backend using the repository's README. It serves this frontend at `/`. Use loopback for the initial laptop demo. The current `ai.py` is a stub; the UI labels its results as placeholders rather than real recognition.
+For the integrated application, start the existing FastAPI backend using the repository's README. It serves this frontend at `/`. Use loopback for the initial laptop demo. The current `ai.py` and `answer.py` are stubs; the UI labels placeholder results rather than presenting real recognition. Answering now belongs to Paul (D); Kenny (C) owns captions.
 
-Implemented existing requests: multipart `POST /frame` (`image`, sampled epoch-ms `ts`); JSON `POST /ask` (`question`); `GET /log`; `POST /reset`. Uploads are bounded to one in-flight per page and skipped while busy, deliberately departing from API.md's fire-and-forget recommendation. Person B should update that shared recommendation after team agreement. Timeouts pause capture and block reset/resume when upload completion is uncertain. Browser cancellation is not server cancellation.
+Implemented existing requests: multipart `POST /frame` (`image`, sampled epoch-ms `ts`); JSON `POST /ask` (`question`); `GET /log`; `GET /latest`; `POST /reset`. Upload acknowledgements accept `caption: null`, matching Vincent's background captioning. `/latest` is polled once per second with one request pending at a time; the same frame ID can transition from analyzing to captioned. Pending captions are normal, not failed uploads. The laptop side preview shows received phone/replay snapshots when no local camera is open, and labels them as snapshots rather than live video. Images are restricted to same-origin frame paths.
 
-The reset UI waits for this page's accepted upload before calling `/reset`. This cannot serialize uploads from other clients: B still needs server-side session/concurrency protection. Capture stop releases camera tracks; accepted server work may finish. No automatic retry of uncertain uploads.
+`/capture.html` provides the separate phone camera workflow expected by README: rear camera by default, Start/Stop, roughly three-second uploads, best-effort wake lock, and explicit pause when hidden. On the phone use Vince's HTTPS tunnel; the laptop stays on localhost. Continuity Camera remains available directly on the laptop.
+
+Uploads are bounded to one in-flight per page, but do not wait for background AI to finish. There is no frontend backlog. Timeouts pause capture and block reset/resume when upload completion is uncertain. Browser cancellation is not server cancellation.
+
+The reset UI waits for this page's accepted upload and checks `/log` for pending captions before calling `/reset`. The user must stop remote phone capture first. This cannot serialize uploads from other clients: B still needs server-side session/concurrency protection. Specifically, background captions may outlive reset and the current store reuses frame IDs, so an old job can label a new frame; jobs need a generation/session guard or non-reused identity. The frontend pending-caption check reduces this risk but cannot make a cross-client atomic guarantee or recover permanently failed caption jobs. Capture stop releases camera tracks; accepted server work may finish. No automatic retry of uncertain uploads.
 
 ## Required calibration API — proposal for Person B
 
@@ -73,8 +77,8 @@ Failure statuses: `pose_required`, `range_unknown`, `ambiguous`, `not_seen`, `ca
 
 ## Verification
 
-- `node --test frontend/test/core.test.mjs` — dependency-free state, geometry and API checks (Node 20+).
-- `node frontend/test/browser.cjs` — requires Playwright and installed Google Chrome, plus the frontend preview at port 8765. Set `PLAYWRIGHT_MODULE` to an installed Playwright module path if needed. Uses a synthetic camera and intercepted API fixtures; does not verify real Continuity Camera or model accuracy.
+- `node --test frontend/test/core.test.mjs` — dependency-free state, geometry and API checks, including null captions and late polling results (Node 20+).
+- `node frontend/test/browser.cjs` — requires Playwright and installed Google Chrome, plus the frontend preview at port 8765. Set `PLAYWRIGHT_MODULE` to an installed Playwright module path if needed. Uses a synthetic camera and intercepted API fixtures, including delayed captions, remote snapshots and the phone page; does not verify real Continuity Camera or model accuracy.
 - Optional `SCREENSHOT_PATH=/absolute/path.png` saves the clean desktop screenshot during the browser test.
 - Real-device verification remains required: actual iPhone selection, permission flow, freeze/disconnect behaviour, measured calibration, moving-camera localization and angle/range accuracy.
 

@@ -49,11 +49,13 @@
     <aside class="side-panel" aria-label="Camera and workspace setup">
       <div class="side-title"><span class="eyebrow">YOUR VIEW</span><span id="cameraBadge" class="state-badge">OFFLINE</span></div>
       <div id="preview" class="preview">
+        <img id="remoteFrame" class="remote-frame" alt="Latest snapshot received from the phone" hidden>
         <video id="camera" autoplay playsinline muted aria-label="Live selected camera preview"></video>
         <div id="cameraPlaceholder" class="camera-placeholder"><div class="camera-orbit"><svg><use href="#i-camera"/></svg></div><strong>Your eyes, remembered.</strong><span>Connect a camera to get started</span></div>
         <span id="liveLabel" class="live-label" hidden><span class="dot"></span> PREVIEW ONLY</span>
         <span class="preview-corner tl"></span><span class="preview-corner br"></span>
       </div>
+      <p id="analysisStatus" class="feed-status" role="status">No remote snapshots yet.</p><a class="capture-page-link" href="capture.html">Open phone capture page ↗</a>
       <div class="device-section"><label for="device">CAMERA SOURCE</label><div class="device-row"><select id="device"><option value="">Choose a camera</option></select><button id="refreshDevices" class="icon-button" type="button" aria-label="Refresh cameras" title="Refresh cameras"><svg><use href="#i-refresh"/></svg></button></div><button id="enableCamera" class="button secondary full" type="button"><svg><use href="#i-camera"/></svg>Enable camera</button></div>
       <div class="capture-controls"><button id="start" class="button primary" type="button" disabled><span class="play-triangle"></span>Start</button><button id="stop" class="button secondary" type="button" disabled><span class="stop-square"></span>Stop</button></div>
       <div id="captureStatus" class="status-line" role="status">Camera off. Nothing is being captured.</div>
@@ -69,7 +71,7 @@
     <section id="setupCheck" hidden><h3>Check against a second measurement</h3><p>Place the second known-size marker from the reference board set at an independent checkpoint in your working area. Keep it in view and enter its measured printed edge.</p><label class="field-label" for="checkSize">Second marker edge (centimetres)</label><input id="checkSize" type="number" min="1" max="500" step="0.1" value="10"><p id="validationSummary" class="field-help">Only a service-validated check can enable metric directions.</p></section>
     <p id="setupStatus" class="setup-status" role="status">Enable your camera before starting setup.</p><div class="dialog-actions"><button id="cancelSetup" class="button secondary" type="button">Cancel</button><button id="setupNext" class="button primary" type="button">Check setup service</button></div>
   </dialog>
-  <dialog id="resetDialog" class="setup-dialog compact-dialog" aria-labelledby="resetTitle"><span class="eyebrow">START FRESH</span><h2 id="resetTitle">Clear saved memories?</h2><p>This stops capture and asks the backend to delete saved sightings and photos. Your chat will clear only after it succeeds.</p><p id="resetStatus" class="setup-status" role="status"></p><div class="dialog-actions"><button id="cancelReset" class="button secondary" type="button">Keep memories</button><button id="confirmReset" class="button danger" type="button">Clear memory</button></div></dialog>
+  <dialog id="resetDialog" class="setup-dialog compact-dialog" aria-labelledby="resetTitle"><span class="eyebrow">START FRESH</span><h2 id="resetTitle">Clear saved memories?</h2><p>Stop any phone capture first. This stops local capture and asks the backend to delete saved sightings and photos once analysis is finished. Your chat clears only after success.</p><p id="resetStatus" class="setup-status" role="status"></p><div class="dialog-actions"><button id="cancelReset" class="button secondary" type="button">Keep memories</button><button id="confirmReset" class="button danger" type="button">Clear memory</button></div></dialog>
   <script type="module" src="app.js"></script>
 </body>
 </html>

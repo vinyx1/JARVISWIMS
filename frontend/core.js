@@ -42,3 +42,19 @@ export function formatDirection(d, profile, now=Date.now()) {
   const angle=Math.round(a/5)*5;
   return `About ${angle}° ${b>0?'left':'right'}${a>90?' (behind you)':''}, roughly ${range} metres away.`;
 }
+
+// Poll the remote feed independently of local camera capture. Stop invalidates old responses.
+export function createLatestPoller({load,onUpdate,onError,schedule=setInterval,cancel=clearInterval}) {
+  let timer=null,generation=0,busy=false,running=false;
+  async function tick() {
+    if(!running||busy)return;
+    busy=true;const current=generation;
+    try {const entry=await load();if(running&&current===generation)onUpdate(entry);}
+    catch(error){if(running&&current===generation)onError(error);}
+    finally{busy=false;}
+  }
+  return {start(){if(running)return;running=true;generation++;timer=schedule(tick,1000);void tick();},stop(){running=false;generation++;if(timer!==null)cancel(timer);timer=null;}};
+}
+export function safeFrameUrl(raw,origin) {
+  try {const u=new URL(raw,origin);return u.origin===origin&&/^\/frames\/f_\d+\.jpg$/.test(u.pathname)&&!u.search&&!u.hash?u.pathname:null;}catch{return null;}
+}

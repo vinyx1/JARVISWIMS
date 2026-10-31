@@ -18,9 +18,10 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
   }
   const json=(path,body,check)=>request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},check);
   return {
-    uploadFrame(blob,ts) {const body=new FormData();body.append('image',blob,'frame.jpg');body.append('ts',String(ts));return request('/frame',{method:'POST',body},x=>typeof x?.id==='string'&&typeof x.caption?.scene==='string');},
+    uploadFrame(blob,ts) {const body=new FormData();body.append('image',blob,'frame.jpg');body.append('ts',String(ts));return request('/frame',{method:'POST',body},x=>typeof x?.id==='string'&&(x.caption===null||typeof x.caption?.scene==='string'));},
     askQuestion(question) {return json('/ask',{question},x=>typeof x?.answer==='string'&&['find','retrace','other'].includes(x.kind)&&Array.isArray(x.frames));},
     getLog:()=>request('/log',{},Array.isArray),
+    getLatest:()=>request('/latest',{},x=>x===null||(typeof x?.id==='string'&&typeof x.url==='string'&&Number.isFinite(x.ts)&&(x.caption===null||typeof x.caption?.scene==='string'))),
     resetMemory:()=>json('/reset',{},x=>x?.ok===true),
     calibrationStatus:()=>request('/calibration/status'),
     startCalibration:body=>json('/calibration/start',body),

@@ -1,22 +1,33 @@
-"""FastAPI app. Owner: Person B. Implements the contract in API.md."""
+"""FastAPI app. Owner: Vince (B). Implements the contract in API.md."""
+import logging
 import time
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import FastAPI, File, Form, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, UploadFile
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 
 import ai  # noqa: E402
+import answer  # noqa: E402
 import store  # noqa: E402
 
-app = FastAPI(title="Echo")
+log = logging.getLogger("uvicorn.error")
+app = FastAPI(title="jarvis")
+
+
+def _caption_in_background(frame_id: str, jpeg: bytes) -> None:
+    try:
+        store.set_caption(frame_id, ai.caption_frame(jpeg))
+    except Exception:
+        log.exception("captioning %s failed", frame_id)
 
 
 @app.post("/frame")
 async def frame(
+    background: BackgroundTasks,
     image: UploadFile = File(...),
     ts: float = Form(None),
     lat: float = Form(None),
@@ -24,11 +35,9 @@ async def frame(
     heading: float = Form(None),
 ):
     jpeg = await image.read()
-    frame_id = store.next_id()
-    url = store.save_frame(frame_id, jpeg)
-    caption = ai.caption_frame(jpeg)
-    store.append({"id": frame_id, "ts": ts or time.time() * 1000, "url": url, "caption": caption})
-    return {"id": frame_id, "caption": caption}
+    entry = store.add_frame(jpeg, ts or time.time() * 1000)
+    background.add_task(_caption_in_background, entry["id"], jpeg)
+    return {"id": entry["id"], "caption": None}
 
 
 class Ask(BaseModel):
@@ -37,11 +46,17 @@ class Ask(BaseModel):
 
 @app.post("/ask")
 def ask(body: Ask):
-    return ai.answer(body.question, store.read_log())
+    captioned = [e for e in store.read_log() if e["caption"]]
+    return answer.answer(body.question, captioned)
+
+
+@app.get("/latest")
+def latest():
+    return store.latest()
 
 
 @app.get("/log")
-def log():
+def full_log():
     return store.read_log()
 
 

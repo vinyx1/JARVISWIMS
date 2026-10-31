@@ -52,3 +52,25 @@ test('API rejects HTTP failures and malformed successful answers',async()=>{
  const offline=createApi({fetchImpl:async()=>new Response('oops',{status:503})}); await assert.rejects(()=>offline.askQuestion('keys'),/503/);
  const bad=createApi({fetchImpl:async()=>new Response('{}')}); await assert.rejects(()=>bad.askQuestion('keys'),/response/i);
 });
+
+test('upload accepts Vincent background-caption response',async()=>{
+ const api=createApi({fetchImpl:async()=>new Response(JSON.stringify({id:'f_000123',caption:null}))});
+ assert.deepEqual(await api.uploadFrame(new Blob(['jpeg']),1234),{id:'f_000123',caption:null});
+});
+test('latest distinguishes empty memory, pending caption and completed caption',async()=>{
+ const pending={id:'f_000123',url:'/frames/f_000123.jpg',ts:1234,caption:null};
+ let response=null;const api=createApi({fetchImpl:async()=>new Response(JSON.stringify(response))});
+ assert.equal(await api.getLatest(),null);
+ response=pending;assert.deepEqual(await api.getLatest(),pending);
+ response={...pending,caption:{scene:'bench',room_guess:'workshop',objects:['helmet'],landmarks:['door']}};
+ assert.equal((await api.getLatest()).caption.objects[0],'helmet');
+ response={id:'x'};await assert.rejects(()=>api.getLatest(),/invalid response/i);
+});
+test('latest polling ignores pre-reset responses and accepts caption completion for the same frame',async()=>{
+ const {createLatestPoller}=await import('../core.js');
+ let tick;const old=deferred(),updates=[];let entry={id:'f_1',caption:null},first=true;
+ const poller=createLatestPoller({load:()=>{if(first){first=false;return old.promise;}return Promise.resolve(entry);},onUpdate:x=>updates.push(x),onError:()=>{},schedule:f=>{tick=f;return 1;},cancel:()=>{}});
+ poller.start();poller.stop();old.resolve({id:'stale',caption:null});await new Promise(r=>setTimeout(r,0));assert.equal(updates.length,0);
+ poller.start();await new Promise(r=>setTimeout(r,0));assert.equal(updates[0].caption,null);
+ entry={id:'f_1',caption:{scene:'helmet on chair'}};await tick();assert.equal(updates.at(-1).caption.scene,'helmet on chair');poller.stop();
+});

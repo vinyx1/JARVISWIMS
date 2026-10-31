@@ -192,3 +192,8 @@ Planning complete does not mean these checks have passed. Report implementation 
 - [MDN: AbortController](https://developer.mozilla.org/en-US/docs/Web/API/AbortController)
 - [OpenCV: measured marker boards for camera pose](https://github.com/opencv/opencv/blob/5.x/doc/tutorials/objdetect/aruco_board_detection/aruco_board_detection.markdown)
 - [OpenCV: triangulation and camera projection matrices](https://docs.opencv.org/4.6.0/d9/d0c/group__calib3d.html)
+
+
+## Upstream compatibility update
+
+Integrated Vincent's changes through `84f3dd4`: `/frame` acknowledges with `caption: null`; captions complete in the background; `/latest` supplies the newest pending/completed sighting; `/ask` delegates to Paul-owned `backend/answer.py`. Frontend upload validation and status now follow that contract. Added `/latest` polling for the side snapshot preview and `/capture.html` for the phone workflow documented upstream. Direct user requirements still take precedence over the upstream full-screen HUD/voice proposal: chat remains primary, voice is excluded, and ungrounded numeric directions remain blocked. Shared team rules and all backend files are preserved from upstream.

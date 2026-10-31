@@ -1,10 +1,10 @@
 import {createApi} from './api.js';
 import {createCameraController,listCameras,captureFrame} from './camera.js';
-import {createCaptureLoop,validateCalibration,formatSeenAt} from './core.js';
+import {createCaptureLoop,validateCalibration,formatSeenAt,createLatestPoller,safeFrameUrl} from './core.js';
 import {addMessage,renderAnswer} from './render.js';
 import {createCalibrationWizard} from './calibration.js';
 const $=id=>document.getElementById(id), api=createApi(), video=$('camera');
-let profile=null,calibrationGeneration=0,resetBusy=false,pendingMessage=null,uiGeneration=0,queryGeneration=0,queryBusy=false,captureUncertain=false,frameProgress=-1,lastProgressAt=0,opening=false,pendingUpload=null;
+let remoteEntry=null,profile=null,calibrationGeneration=0,resetBusy=false,pendingMessage=null,uiGeneration=0,queryGeneration=0,queryBusy=false,captureUncertain=false,frameProgress=-1,lastProgressAt=0,opening=false,pendingUpload=null;
 const storedDevice=()=>{try{return localStorage.getItem('visual-memory.camera')||'';}catch{return '';}};
 function saveDevice(value){try{localStorage.setItem('visual-memory.camera',value);}catch{}}
 function status(text,error=false){$('captureStatus').textContent=text;$('captureStatus').classList.toggle('error',error);}
@@ -23,7 +23,9 @@ function controls(){
   $('clearMemory').disabled=resetBusy;
   $('question').disabled=resetBusy;
   $('send').disabled=queryBusy||resetBusy;
-  $('cameraBadge').textContent=loop.running?'CAPTURING':hasCamera?'PREVIEW':'OFFLINE';
+  $('cameraBadge').textContent=loop.running?'CAPTURING':hasCamera?'PREVIEW':remoteEntry?'SNAPSHOT':'OFFLINE';
+  $('remoteFrame').hidden=hasCamera||!remoteEntry;
+  $('cameraPlaceholder').hidden=hasCamera||!!remoteEntry;
   $('cameraBadge').classList.toggle('active',hasCamera);
   $('liveLabel').hidden=!hasCamera;$('liveLabel').innerHTML='';
   if(hasCamera){const dot=document.createElement('span');dot.className='dot';$('liveLabel').append(dot,document.createTextNode(loop.running?' CAPTURING':' PREVIEW ONLY'));}
@@ -41,7 +43,7 @@ const loop=createCaptureLoop({
     try{return await pendingUpload;}catch(error){if(error.uncertain){captureUncertain=true;status(error.message+' Upload completion needs to be resolved before another capture session.',true);}throw error;}
     finally{pendingUpload=null;setTimeout(controls,0);}
   },
-  onSaved(result){$('lastSaved').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});status(/\bstub\b/i.test(result.caption.scene)?'Frame saved. Recognition is still using a placeholder.':'Sighting saved. Capturing when processing is ready.');controls();},
+  onSaved(result){$('lastSaved').textContent=new Date().toLocaleTimeString([],{hour:'2-digit',minute:'2-digit'});status(result.caption===null?'Frame saved. Analyzing in the background…':/\bstub\b/i.test(result.caption.scene)?'Frame saved. Recognition is still using a placeholder.':'Sighting saved. Capturing when processing is ready.');controls();},
   onError(error){status(error.message,true);controls();}
 });
 const wizard=createCalibrationWizard({api,video,getSettings:settings,onComplete:applyProfile,onPause(){loop.stop();controls();},onInvalidate:invalidate});
@@ -84,7 +86,8 @@ setInterval(()=>{
 },1000);
 navigator.mediaDevices?.addEventListener?.('devicechange',refreshDevices);
 document.addEventListener('visibilitychange',()=>{if(document.hidden&&loop.running){loop.stop();invalidate();status('Capture paused while this tab is hidden. Press Start to resume.');controls();}});
-window.addEventListener('pagehide',stopAll);
+window.addEventListener('pagehide',()=>{stopAll();latestPoller.stop();});
+window.addEventListener('pageshow',event=>{if(event.persisted){latestPoller.start();void connection();}});
 function resizeInput(){$('question').style.height='auto';$('question').style.height=Math.min($('question').scrollHeight,140)+'px';}
 $('question').addEventListener('input',resizeInput);
 $('question').addEventListener('keydown',event=>{if(event.key==='Enter'&&!event.shiftKey&&!event.isComposing){event.preventDefault();$('askForm').requestSubmit();}});
@@ -108,16 +111,31 @@ $('clearMemory').onclick=()=>{
 $('cancelReset').onclick=()=>{if(!resetBusy)$('resetDialog').close();};
 $('resetDialog').addEventListener('cancel',event=>{if(resetBusy)event.preventDefault();});
 $('confirmReset').onclick=async()=>{
-  if(resetBusy)return;resetBusy=true;queryGeneration++;queryBusy=false;
+  if(resetBusy)return;resetBusy=true;latestPoller.stop();queryGeneration++;queryBusy=false;
   pendingMessage?.update('Request cancelled because memories are being cleared.');pendingMessage=null;controls();
   $('confirmReset').disabled=true;$('cancelReset').disabled=true;$('resetStatus').textContent='Waiting for accepted uploads to finish…';
   try{
     if(pendingUpload)await pendingUpload;
     if(captureUncertain)throw Error('Upload completion is uncertain. Resolve it on the backend before clearing.');
+    const sightings=await api.getLog();
+    if(sightings.some(entry=>entry.caption===null))throw Error('Snapshots are still being analyzed. Stop phone capture, wait for processing to finish, then retry.');
     $('resetStatus').textContent='Clearing saved sightings…';await api.resetMemory();
-    $('chat').replaceChildren();addMessage($('chat'),'assistant','Saved memories cleared. Enable your camera and start a fresh session.');$('lastSaved').textContent='No sightings yet';$('resetDialog').close();
+    $('chat').replaceChildren();addMessage($('chat'),'assistant','Saved memories cleared. Enable your camera and start a fresh session.');$('lastSaved').textContent='No sightings yet';showLatest(null);$('resetDialog').close();
   }catch(error){$('resetStatus').textContent=error.message;}
-  finally{resetBusy=false;$('confirmReset').disabled=captureUncertain;$('cancelReset').disabled=false;controls();}
+  finally{resetBusy=false;$('confirmReset').disabled=captureUncertain;$('cancelReset').disabled=false;latestPoller.start();controls();}
 };
 async function connection(){try{const log=await api.getLog();$('serviceStatus').textContent='Backend connected';const newest=log.filter(x=>typeof x.ts==='number').sort((a,b)=>b.ts-a.ts)[0];if(newest)$('lastSaved').textContent=formatSeenAt(newest.ts);}catch{$('serviceStatus').textContent='Backend not connected';}}
-void refreshDevices();void connection();controls();
+function showLatest(entry){
+  const path=entry&&safeFrameUrl(entry.url,location.origin);
+  remoteEntry=path?entry:null;
+  if(remoteEntry){
+    const image=$('remoteFrame'),source=`${path}?v=${entry.ts}`;
+    if(image.getAttribute('src')!==source)image.src=source;
+    $('lastSaved').textContent=formatSeenAt(entry.ts);
+    $('analysisStatus').textContent=entry.caption===null?'Snapshot received · Analyzing…':/\bstub\b/i.test(entry.caption.scene)?'Snapshot received · Recognition placeholder':entry.caption.scene;
+  }else{$('remoteFrame').removeAttribute('src');$('analysisStatus').textContent='No remote snapshots yet.';}
+  controls();
+}
+$('remoteFrame').addEventListener('error',()=>{$('analysisStatus').textContent='The latest snapshot could not be loaded.';});
+const latestPoller=createLatestPoller({load:()=>api.getLatest(),onUpdate:showLatest,onError(){ $('analysisStatus').textContent='Remote snapshot feed unavailable.'; }});
+void refreshDevices();void connection();latestPoller.start();controls();
