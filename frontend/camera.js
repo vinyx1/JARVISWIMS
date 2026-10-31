@@ -17,12 +17,12 @@ export function createCameraController({media,attach,onEnded=()=>{}}) {
 export async function listCameras(media=navigator.mediaDevices) {
   return (await media.enumerateDevices()).filter(device=>device.kind==='videoinput');
 }
-export async function captureFrame(video) {
+export async function captureFrame(video, {width=640, quality=.75}={}) {
   if(video.readyState<2||!video.videoWidth) return null;
   const ts=Date.now(), canvas=document.createElement('canvas');
-  canvas.width=Math.min(640,video.videoWidth); canvas.height=Math.round(canvas.width*video.videoHeight/video.videoWidth);
+  canvas.width=Math.min(width,video.videoWidth); canvas.height=Math.round(canvas.width*video.videoHeight/video.videoWidth);
   canvas.getContext('2d').drawImage(video,0,0,canvas.width,canvas.height);
-  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',.75));
+  const blob=await new Promise(resolve=>canvas.toBlob(resolve,'image/jpeg',quality));
   if(!blob) throw Error('Could not capture this frame. Try restarting the camera.');
   return {blob,ts};
 }

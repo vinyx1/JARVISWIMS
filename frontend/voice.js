@@ -11,6 +11,7 @@ const SPEAK_TIMEOUT_MS = 2500;
 export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}, onLevel = () => {} }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null, wanted = false, ptt = false, pttText = '', armedUntil = 0, voice = null;
+  let restartTimer = null, releaseTimer = null, blocked = false;
   let queue = Promise.resolve(), generation = 0, playing = null, browserTalking = false;
   let audioCtx = null, analyser = null, levelRaf = 0;
   const preloaded = new Map();   // text -> Promise<Blob|null>, for lines we know in advance
@@ -80,7 +81,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     });
   }
 
-  const isSpeaking = () => !!playing || browserTalking || ('speechSynthesis' in window && speechSynthesis.speaking);
+  const isSpeaking = () => !!playing || browserTalking || !!window.speechSynthesis?.speaking;
 
   function trackLevel() {
     if (levelRaf) return;
@@ -104,12 +105,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
 
   function speak(text, { interrupt = false } = {}) {
     if (!text) return;
-    if (interrupt) {
-      generation++;
-      playing?.pause();
-      if ('speechSynthesis' in window) speechSynthesis.cancel();
-      queue = Promise.resolve();
-    }
+    if (interrupt) silence();
     const gen = generation;
     const audio = preloaded.get(text) ?? requestSpeech(text);    // start fetching now, play in order
     queue = queue.then(async () => {
@@ -136,40 +132,58 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     }
   }
 
-  function start() {
+  // Recognition lifecycle hardened in Jogindar's #12: stale recognizers can't submit,
+  // stop() during a queued restart stays stopped, and a mic denial stays visible.
+  function connect() {
+    if (!wanted) return;
     if (!SR) { onState('unsupported'); return; }
-    wanted = true;
     if (rec) return;
     rec = new SR();
+    const recognition = rec;
     rec.continuous = true;
     rec.interimResults = true;
     rec.lang = 'en-US';
     rec.onresult = e => {
+      if (!wanted || rec !== recognition) return;
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
         if (r.isFinal) handleFinal(r[0].transcript);
         else onHeard(r[0].transcript, true);
       }
     };
-    rec.onstart = () => onState(ptt ? 'ptt' : 'listening');
+    rec.onstart = () => { if (wanted && rec === recognition) onState(ptt ? 'ptt' : 'listening'); };
     rec.onerror = e => {
-      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wanted = false; onState('denied'); }
+      if (rec !== recognition) return;
+      if (e.error === 'not-allowed' || e.error === 'service-not-allowed') { wanted = false; blocked = true; clearTimeout(restartTimer); onState('denied'); }
     };
-    rec.onend = () => { rec = null; if (wanted) setTimeout(start, 250); else onState('off'); };
+    rec.onend = () => { if (rec !== recognition) return; rec = null; if (wanted) restartTimer = setTimeout(() => { if (wanted) connect(); }, 250); else onState(blocked ? 'denied' : 'off'); };
     try { rec.start(); } catch { /* already started */ }
   }
 
-  function stop() { wanted = false; rec?.stop(); }
+  function silence() {
+    generation++; playing?.pause(); queue = Promise.resolve();
+    window.speechSynthesis?.cancel();
+  }
+
+  function start() { wanted = true; blocked = false; clearTimeout(restartTimer); connect(); }
+  function stop() {
+    wanted = false; blocked = false; ptt = false; pttText = ''; armedUntil = 0;
+    clearTimeout(restartTimer); clearTimeout(releaseTimer); releaseTimer = null;
+    silence();
+    const previous = rec; rec = null;
+    if (previous?.abort) previous.abort(); else previous?.stop();
+    onState('off');
+  }
 
   // Hold space: everything said until release is the question, no wake word needed.
   function pushToTalk(down) {
     if (!SR) return;
-    if (down && !ptt) { ptt = true; pttText = ''; onState('ptt'); start(); }
-    if (!down && ptt) {
-      setTimeout(() => {                                // let the last final result arrive
-        ptt = false; onState('listening');
+    if (down && !ptt) { clearTimeout(releaseTimer); releaseTimer = null; silence(); ptt = true; pttText = ''; onState('ptt'); start(); }
+    if (!down && ptt && releaseTimer === null) {
+      releaseTimer = setTimeout(() => {                                // let the last final result arrive
+        releaseTimer = null; ptt = false; onState(blocked ? 'denied' : wanted ? 'listening' : 'off');
         const q = pttText.replace(WAKE, '').trim();
-        if (q.length > 2) onQuestion(q);
+        if (wanted && q.length > 2) onQuestion(q);
       }, 900);
     }
   }

@@ -10,7 +10,8 @@
   <link rel="stylesheet" href="hud.css">
 </head>
 <body class="booting">
-  <!-- Laptop HUD on the projector. Owner: Jogindar (A); redesign by Paul with Jogindar's OK. -->
+  <!-- Laptop HUD on the projector. Owner: Jogindar (A); redesign by Paul with Jogindar's OK;
+       round-two features (live preview, remember, matches, outline) from Jogindar's #19. -->
   <main class="stage" aria-label="Suit camera heads-up display">
     <!-- full-screen live feed: a blurred copy fills the screen, the real frame sits on top uncropped -->
     <img id="liveBg" class="live-bg" alt="" hidden>
@@ -30,6 +31,7 @@
         <span class="kv"><span class="k">ROOM</span><span id="room" class="v">—</span></span>
         <span class="kv"><span class="k">FRAME</span><span id="frameChip" class="v">—</span></span>
         <span id="age" class="dim">—</span>
+        <span id="liveChip" class="chip live-chip" hidden>● LIVE</span>
         <span id="linkChip" class="chip">LINK ···</span>
         <span id="micChip" class="chip">MIC OFF</span>
       </div>
@@ -41,11 +43,21 @@
       <ul id="objects" class="objects"></ul>
     </section>
 
+    <!-- items sir has registered ("this is my laptop, remember it"); hidden while empty -->
+    <section id="mineCard" class="card mine-card" aria-label="My registered items" hidden>
+      <div class="label">MY ITEMS</div>
+      <ul id="myItems" class="my-items"></ul>
+    </section>
+
     <!-- answer: evidence photo + way back -->
     <aside id="evidence" class="card evidence" hidden aria-label="Where Jarvis last saw it">
-      <div class="label">LAST SEEN</div>
-      <figure class="frame"><img id="heroImg" alt="Where Jarvis last saw it"></figure>
+      <div id="evidenceTitle" class="label">LAST SEEN</div>
+      <figure class="frame hero-media">
+        <img id="heroImg" alt="Where Jarvis last saw it">
+        <svg id="objectOutline" class="object-outline" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Selected object location in this photo" hidden><rect class="selected-object-box" /></svg>
+      </figure>
       <div class="cap"><span id="heroNote"></span><span id="heroAge"></span></div>
+      <div id="candidates" class="candidate-options" aria-label="Possible object matches" hidden></div>
       <div id="trailTitle" class="label" hidden>ROUTE BACK</div>
       <ol id="trail" class="trail"></ol>
     </aside>

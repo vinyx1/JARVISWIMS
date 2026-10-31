@@ -11,17 +11,16 @@ import time
 from pathlib import Path
 
 import httpx
+from photos import find_images
 
 p = argparse.ArgumentParser()
-p.add_argument("folder", nargs="?", default="samples")
+p.add_argument("folder", nargs="?", default="samples", help="scenario folder, e.g. samples/vince")
 p.add_argument("--url", default="http://localhost:8000")
 p.add_argument("--every", type=float, default=3.0, help="seconds between frames")
 p.add_argument("--reset", action="store_true", help="clear the log first")
 args = p.parse_args()
 
-images = sorted(f for f in Path(args.folder).iterdir() if f.suffix.lower() in {".jpg", ".jpeg", ".png"})
-if not images:
-    raise SystemExit(f"No images in {args.folder}/. Add the demo-route photos there first.")
+images = find_images(args.folder)
 
 with httpx.Client(base_url=args.url, timeout=30) as client:
     if args.reset:

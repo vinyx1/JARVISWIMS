@@ -74,7 +74,9 @@ body.thinking .core { animation: blink .5s steps(2) infinite; }
 .evidence { right: 2.4cqw; width: 26cqw; border-color: rgba(242, 181, 68, .45); animation: lock .45s ease-out both; }
 .evidence .label:first-child { color: var(--gold); }
 .evidence .frame { margin: 0; border-radius: 2px; overflow: hidden; box-shadow: 0 0 0 1px rgba(242, 181, 68, .5); }
-.evidence img { display: block; width: 100%; max-height: 34vh; object-fit: cover; }
+.evidence img { display: block; width: 100%; max-height: 34vh; object-fit: contain; background: #000; }
+.evidence { max-height: calc(100vh - 10cqw); overflow-y: auto; }
+.evidence .label.registered { color: var(--gold); }
 .cap { display: grid; gap: .2cqw; }
 #heroNote { font: 600 1.1cqw/1.25 var(--display); color: var(--ink); }
 #heroAge { font-size: .8cqw; letter-spacing: .14em; text-transform: uppercase; color: var(--dim); }
@@ -82,6 +84,23 @@ body.thinking .core { animation: blink .5s steps(2) infinite; }
 .trail li { counter-increment: step; display: flex; gap: .7cqw; font-size: .9cqw; color: var(--ink); }
 .trail li::before { content: counter(step, decimal-leading-zero); color: var(--arc); }
 .trail li:last-child, .trail li:last-child::before { color: var(--gold); }
+
+/* ---------- round two: live chip, outline, match options, my items ---------- */
+.live-chip { color: var(--alert); border-color: var(--alert); }
+.hero-media { position: relative; }
+.object-outline { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
+.selected-object-box { fill: rgba(242, 181, 68, .08); stroke: var(--gold); stroke-width: 3; vector-effect: non-scaling-stroke; }
+.candidate-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6cqw; }
+.candidate-option { min-width: 0; padding: .4cqw; border: 1px solid var(--glass-line); border-radius: 2px; background: rgba(0, 0, 0, .4);
+  color: var(--ink); text-align: left; font: .8cqw/1.3 var(--mono); cursor: pointer; }
+.candidate-option[aria-pressed="true"] { border-color: var(--gold); color: #ffe7b0; }
+.candidate-option img { display: block; width: 100%; height: 5cqw; object-fit: contain; background: #000; }
+.candidate-option span { display: block; margin-top: .3cqw; overflow-wrap: anywhere; }
+.mine-card { top: auto; bottom: 3cqw; left: 2.4cqw; width: 19cqw; border-color: rgba(242, 181, 68, .45); }
+.mine-card .label { color: var(--gold); }
+.my-items { margin: 0; padding: 0; list-style: none; display: grid; gap: .5cqw; }
+.my-items li { font-size: .85cqw; line-height: 1.35; color: var(--dim); }
+.my-items li strong { display: block; font: 600 1cqw/1.2 var(--display); color: #ffe7b0; text-transform: uppercase; letter-spacing: .08em; }
 
 /* ---------- subtitles (T) ---------- */
 .subs { position: absolute; left: 50%; bottom: 3cqw; transform: translateX(-50%); width: 52cqw; display: none; gap: .5cqw;
