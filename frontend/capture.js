@@ -37,7 +37,8 @@ window.addEventListener('pagehide',stop);controls();
 const previewApi=createApi({timeoutMs:2000});
 const preview=createPreviewSender({
  intervalMs:66, maxInFlight:5,   // ~15 fps target; the tunnel round trip is the real limit
- sample:()=>captureFrame(video,{width:360,quality:.45}),
+ // Sideways phones fill the whole projector, so they need more pixels than an upright 360px strip.
+ sample:()=>captureFrame(video,video.videoWidth>video.videoHeight?{width:640,quality:.5}:{width:360,quality:.45}),
  send:(blob,ts,signal)=>previewApi.uploadPreview(blob,ts,signal),
  canSend:()=>loop.running&&!document.hidden
 });
