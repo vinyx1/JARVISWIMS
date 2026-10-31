@@ -37,15 +37,27 @@ curl -sf -o /dev/null "localhost:$PORT/latest" || die "Backend didn't start. See
 if (( KEEP )); then c 36 "▶ Keeping memory ($(curl -s localhost:$PORT/log | grep -o '"id"' | wc -l | tr -d ' ') frames)"
 else curl -sf -X POST "localhost:$PORT/reset" >/dev/null && c 36 "▶ Memory cleared"; fi
 
-c 36 "▶ Starting tunnel"
-cloudflared tunnel --url "http://localhost:$PORT" > data/tunnel.log 2>&1 &
-PIDS+=($!)
-URL=""
-for _ in $(seq 60); do
-  URL=$(grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' data/tunnel.log | head -1)
-  [[ -n "$URL" ]] && break; sleep 0.5
+# Cloudflare's quick-tunnel API sometimes times out: retry up to 3 times.
+URL=""; TUNNEL=""
+for attempt in 1 2 3; do
+  c 36 "▶ Starting tunnel (attempt $attempt)"
+  cloudflared tunnel --url "http://localhost:$PORT" > data/tunnel.log 2>&1 &
+  TUNNEL=$!
+  for _ in $(seq 60); do
+    URL=$(grep -v api.trycloudflare data/tunnel.log | grep -o 'https://[a-z0-9-]*\.trycloudflare\.com' | head -1)
+    [[ -n "$URL" ]] && break
+    kill -0 "$TUNNEL" 2>/dev/null || break      # cloudflared gave up (e.g. API timeout)
+    sleep 0.5
+  done
+  [[ -n "$URL" ]] && break
+  kill "$TUNNEL" 2>/dev/null; c 33 "  tunnel failed: $(grep -m1 -i 'failed' data/tunnel.log | cut -c1-120)"
+  sleep 2
 done
-[[ -n "$URL" ]] || die "No tunnel URL after 30s. Check the hotspot; see data/tunnel.log"
+if [[ -z "$URL" ]]; then
+  kill "${PIDS[@]}" 2>/dev/null
+  die "No tunnel after 3 tries. Check the internet/hotspot; see data/tunnel.log"
+fi
+PIDS+=("$TUNNEL")
 
 # The Mac's own DNS often caches a miss for brand-new names, so check through 1.1.1.1.
 HOST=${URL#https://}; ok=0
@@ -56,7 +68,27 @@ for _ in $(seq 30); do
 done
 
 caffeinate -dimsu & PIDS+=($!)
-open -a "Google Chrome" "http://localhost:$PORT" 2>/dev/null || open "http://localhost:$PORT"
+# Reuse an open HUD tab (reload it) instead of stacking duplicates that fight over the mic.
+found=$(osascript 2>/dev/null <<OSA
+tell application "Google Chrome"
+  set n to 0
+  repeat with w in windows
+    repeat with t in tabs of w
+      if URL of t starts with "http://localhost:$PORT" then
+        if n is 0 then
+          reload t
+        else
+          close t
+        end if
+        set n to n + 1
+      end if
+    end repeat
+  end repeat
+  return n
+end tell
+OSA
+)
+[[ "${found:-0}" -gt 0 ]] || open -a "Google Chrome" "http://localhost:$PORT" 2>/dev/null || open "http://localhost:$PORT"
 
 echo
 c "1;32" "  iPhone →  $URL/capture.html"
