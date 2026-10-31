@@ -10,71 +10,79 @@
   <link rel="stylesheet" href="hud.css">
 </head>
 <body class="booting">
-  <!-- Laptop HUD on the projector. Owner: Jogindar (A); redesign by Paul with Jogindar's OK;
-       round-two features (live preview, remember, matches, outline) from Jogindar's #19. -->
+  <!-- Owner: Jogindar (A). Laptop HUD shown on the projector. Glass redesign by Paul with Jogindar's OK. See CLAUDE.md. -->
   <main class="stage" aria-label="Suit camera heads-up display">
     <!-- full-screen live feed: a blurred copy fills the screen, the real frame sits on top uncropped -->
     <img id="liveBg" class="live-bg" alt="" hidden>
-    <img id="live" class="live" alt="Latest frame from the suit camera" hidden>
+    <img id="live" class="live" alt="Latest frame from the phone" hidden>
     <div class="vignette" aria-hidden="true"></div>
 
-    <div id="idle" class="idle">AWAITING VISUAL FEED<small>Open the capture page on the iPhone and press Start.</small></div>
+    <div id="idle" class="idle">
+      <p>AWAITING VISUAL FEED</p>
+      <p class="hint">Open the capture page on the iPhone and press Start.</p>
+    </div>
 
     <header class="top">
       <div class="brand">
         <!-- core: gold while listening, blinks while thinking, glows with Jarvis's voice -->
         <span class="core" aria-hidden="true"></span>
         <span class="name">J.A.R.V.I.S.</span>
-        <span id="status" class="status">STANDBY</span>
+        <span id="scanState" class="scan-state">STANDBY</span>
       </div>
       <div class="chips">
-        <span class="kv"><span class="k">ROOM</span><span id="room" class="v">—</span></span>
-        <span class="kv"><span class="k">FRAME</span><span id="frameChip" class="v">—</span></span>
+        <span id="room" class="v">ROOM —</span>
         <span id="age" class="dim">—</span>
-        <span id="liveChip" class="chip live-chip" hidden>● LIVE</span>
+        <span id="liveChip" class="chip live" hidden>● LIVE</span>
+        <span id="frameChip" class="chip">FRAMES 0</span>
         <span id="linkChip" class="chip">LINK ···</span>
         <span id="micChip" class="chip">MIC OFF</span>
       </div>
     </header>
 
-    <!-- what the suit sees right now -->
-    <section class="card objects-card" aria-label="Objects and landmarks in view">
-      <div class="label">IN VIEW</div>
-      <ul id="objects" class="objects"></ul>
-    </section>
+    <div class="side left">
+      <!-- what the suit sees right now -->
+      <section class="card in-view" aria-label="Objects and landmarks in view">
+        <div class="label">IN VIEW</div>
+        <ul id="objects" class="objects"></ul>
+        <p id="scene" class="sr-only"></p>
+      </section>
 
-    <!-- items sir has registered ("this is my laptop, remember it"); hidden while empty -->
-    <section id="mineCard" class="card mine-card" aria-label="My registered items" hidden>
-      <div class="label">MY ITEMS</div>
-      <ul id="myItems" class="my-items"></ul>
-    </section>
+      <section class="card my-items" aria-label="My registered items">
+        <div class="label">MY ITEMS</div>
+        <ul id="myItems"><li class="empty-item">No items registered yet.</li></ul>
+        <p id="mineStatus" class="mine-status" role="status" hidden></p>
+      </section>
+    </div>
 
-    <!-- answer: evidence photo + way back -->
+    <!-- answer: evidence photo, optional object outline, candidates or the way back -->
     <aside id="evidence" class="card evidence" hidden aria-label="Where Jarvis last saw it">
       <div id="evidenceTitle" class="label">LAST SEEN</div>
-      <figure class="frame hero-media">
-        <img id="heroImg" alt="Where Jarvis last saw it">
-        <svg id="objectOutline" class="object-outline" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Selected object location in this photo" hidden><rect class="selected-object-box" /></svg>
+      <figure class="hero">
+        <div class="hero-media">
+          <img id="heroImg" alt="Where Jarvis last saw it">
+          <svg id="objectOutline" class="object-outline" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMidYMid meet" role="img" aria-label="Selected object location in this photo" hidden><rect class="selected-object-box" /></svg>
+        </div>
+        <figcaption id="heroCap"></figcaption>
       </figure>
-      <div class="cap"><span id="heroNote"></span><span id="heroAge"></span></div>
       <div id="candidates" class="candidate-options" aria-label="Possible object matches" hidden></div>
-      <div id="trailTitle" class="label" hidden>ROUTE BACK</div>
+      <div class="label" id="trailTitle" hidden>ROUTE BACK</div>
       <ol id="trail" class="trail"></ol>
     </aside>
 
-    <!-- subtitles: off by default (Jarvis speaks), T toggles -->
-    <div id="subs" class="subs" aria-live="polite">
-      <div id="subQ" class="sub-q"></div>
-      <div id="subA" class="sub-a"></div>
-    </div>
+    <!-- subtitles: hidden by default because Jarvis speaks; T shows the last exchange -->
+    <section class="subs" aria-label="Subtitles">
+      <div id="transcript" class="transcript" aria-live="polite"></div>
+      <div id="heard" class="heard"></div>
+    </section>
 
     <!-- typed fallback for a loud room: press / -->
     <form id="askForm" class="ask" hidden>
-      <span class="prompt">&gt;</span>
+      <span class="prompt" aria-hidden="true">&gt;</span>
       <input id="q" placeholder="Ask Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
+      <button>SEND</button>
     </form>
 
-    <div id="engage" class="engage">CLICK TO ENGAGE<small>Say "Jarvis, …" · hold Space to talk · / to type · T subtitles · R reset</small></div>
+    <div class="engage">CLICK TO ENGAGE<small>Say "Jarvis, …" · hold Space to talk · / to type · T subtitles · R reset</small></div>
   </main>
 
   <div id="toast" class="toast" hidden></div>
