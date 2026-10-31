@@ -34,6 +34,7 @@ VOICE_SETTINGS = {"stability": 0.2, "similarity_boost": 0.75, "style": 0.75, "us
 TIMEOUT_S = 4.0          # past this, the browser voice is faster
 MAX_CONCURRENT = 3       # below the plan's limit of 5, leaving room for other teammates' tests
 RETRY_DELAY_S = 0.4
+SLOT_WAIT_S = TIMEOUT_S     # /speak is public via the tunnel: never wait forever for a slot
 CACHE_SIZE = 64
 
 logger = logging.getLogger("uvicorn.error")
@@ -54,14 +55,23 @@ def _remember(key: tuple[str, str, str], audio: bytes) -> None:
             _cache.pop(next(iter(_cache)))       # drop the oldest line
 
 
+class _Busy(Exception):
+    """All ElevenLabs slots stayed taken for SLOT_WAIT_S."""
+
+
 def _request(http: httpx.Client, voice_id: str, model: str, text: str, api_key: str) -> httpx.Response:
-    with _slots:
+    # Bounded wait: a flood of /speak calls must not pile up threads in the shared pool (/ask uses it too).
+    if not _slots.acquire(timeout=SLOT_WAIT_S):
+        raise _Busy()
+    try:
         return http.post(
             API_URL.format(voice_id=voice_id),
             params={"output_format": OUTPUT_FORMAT},
             headers={"xi-api-key": api_key},
             json={"text": text, "model_id": model, "voice_settings": VOICE_SETTINGS},
         )
+    finally:
+        _slots.release()
 
 
 def synthesize(text: str | None, *, client: httpx.Client | None = None) -> bytes | None:
@@ -86,6 +96,9 @@ def synthesize(text: str | None, *, client: httpx.Client | None = None) -> bytes
         if r.status_code == 429:                 # over the concurrency limit: wait a moment, try once more
             time.sleep(RETRY_DELAY_S)
             r = _request(http, voice_id, model, text, api_key)
+    except _Busy:
+        logger.warning("ElevenLabs busy for %.1fs; falling back to another voice", SLOT_WAIT_S)
+        return None
     except httpx.HTTPError as e:
         logger.warning("ElevenLabs request failed (%s); the browser voice will speak", type(e).__name__)
         return None
