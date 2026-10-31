@@ -6,7 +6,8 @@
 // the browser's British voice speaks, synchronously, exactly as before.
 // onLevel(0..1) reports how loud Jarvis is, for the HUD's voice indicator.
 
-const WAKE = /^\s*(?:hey|ok|okay)?\s*j[ae]rv[iu]s\b[\s,.!?]*/i;
+// Anywhere in the sentence, plus the ways Chrome commonly mishears "Jarvis".
+const WAKE = /\b(?:(?:hey|ok|okay)\s+)?(?:j[ae]r?v[aeiu]s|jarvi[sz]|jervis|javis|travis|garvis|jarbis)\b[\s,.!?]*/i;
 const SPEAK_TIMEOUT_MS = 2500;
 
 export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}, onLevel = () => {} }) {
@@ -125,7 +126,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     if (isSpeaking()) return;                                  // don't hear Jarvis talking to himself
     const m = text.match(WAKE);
     if (m) {
-      const rest = text.slice(m[0].length).trim();
+      const rest = text.slice(m.index + m[0].length).trim();
       if (rest.length > 2) { armedUntil = 0; onQuestion(rest); }
       else { armedUntil = Date.now() + 7000; onState('armed'); speak('Sir?'); }
     } else if (Date.now() < armedUntil) {
@@ -141,12 +142,13 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     const recognition = rec;
     rec.continuous = true;
     rec.interimResults = true;
+    rec.maxAlternatives = 3;
     rec.lang = 'en-US';
     rec.onresult = e => {
       if (!wanted || rec !== recognition) return;
       for (let i = e.resultIndex; i < e.results.length; i++) {
         const r = e.results[i];
-        if (r.isFinal) handleFinal(r[0].transcript);
+        if (r.isFinal) handleFinal(([...r].find(alt => WAKE.test(alt.transcript)) || r[0]).transcript);
         else onHeard(r[0].transcript, true);
       }
     };

@@ -50,6 +50,9 @@ def test_returns_mp3_and_calls_jarvis_voice():
     body = json.loads(req.content)
     assert body["text"] == "Your helmet is on the grey chair, sir."
     assert body["model_id"] == voice.DEFAULT_MODEL
+    # variant C (picked by ear): expressive, slightly slower, a little dramatic
+    assert body["voice_settings"] == {"stability": 0.2, "similarity_boost": 0.75, "style": 0.75,
+                                      "use_speaker_boost": True, "speed": 0.92}
 
 
 def test_voice_and_model_can_be_overridden_by_env(monkeypatch):

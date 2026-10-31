@@ -43,6 +43,8 @@ body { font-family: var(--mono); }
 .scan-state { font-size: .85cqw; letter-spacing: .25em; color: var(--dim); padding-left: 1cqw; border-left: 1px solid var(--glass-line); white-space: nowrap; }
 .scan-state.busy, body.listening .scan-state { color: var(--gold); }
 body.thinking .scan-state { animation: blink 1s steps(2) infinite; }
+/* what the mic just heard, for a moment: tells you on stage whether recognition is working */
+.ear { font-size: .85cqw; color: var(--gold); max-width: 30cqw; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .core { flex: none; width: .95cqw; height: .95cqw; border-radius: 50%; border: .14cqw solid var(--arc);
   background: rgba(70, 230, 255, calc(.15 + var(--level) * .85));
   box-shadow: 0 0 calc(.3cqw + var(--level) * 1.6cqw) var(--arc); transition: background .08s, box-shadow .08s; }
