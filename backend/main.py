@@ -1,5 +1,7 @@
 """FastAPI app. Owner: Vince (B). Implements the contract in API.md."""
+import asyncio
 import logging
+import os
 import time
 from pathlib import Path
 
@@ -16,6 +18,7 @@ import store  # noqa: E402
 
 log = logging.getLogger("uvicorn.error")
 app = FastAPI(title="jarvis")
+ASK_TIMEOUT_S = float(os.getenv("ASK_TIMEOUT_S", "12"))
 
 
 def _caption_in_background(frame_id: str, jpeg: bytes) -> None:
@@ -45,9 +48,20 @@ class Ask(BaseModel):
 
 
 @app.post("/ask")
-def ask(body: Ask):
+async def ask(body: Ask):
+    """Never leave Jarvis silent on stage: time out or fail into an in-character reply."""
     captioned = [e for e in store.read_log() if e["caption"]]
-    return answer.answer(body.question, captioned)
+    try:
+        return await asyncio.wait_for(
+            asyncio.to_thread(answer.answer, body.question, captioned), timeout=ASK_TIMEOUT_S
+        )
+    except asyncio.TimeoutError:
+        log.warning("/ask timed out after %ss: %r", ASK_TIMEOUT_S, body.question)
+        return {"answer": "My apologies, sir, the footage is taking longer than expected. Ask me again in a moment.",
+                "kind": "other", "frames": []}
+    except Exception:
+        log.exception("/ask failed: %r", body.question)
+        return {"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}
 
 
 @app.get("/latest")
