@@ -25,6 +25,7 @@ let browser;
  await page.route('**/preview.jpg',r=>{previewCalls++;return r.fulfill(previewMode==='live'?{body:photo,contentType:'image/svg+xml'}:{status:204});});
  await page.route('**/latest',r=>{latestCalls++;return r.fulfill(offline?{status:503,json:{detail:'test offline'}}:{json:latest});});
  await page.route('**/mine',r=>r.fulfill({json:mine}));
+ await page.route('**/speak',r=>r.fulfill({status:404})); // no ElevenLabs in tests: browser voice
  await page.route('**/log',r=>r.fulfill({json:latest?[latest]:[]}));
  await page.route('**/reset',async r=>{resetCount++;mine=[];await new Promise(resolve=>setTimeout(resolve,600));latest=null;await r.fulfill({json:{ok:true}});});
  const answer='Sir, your helmet was last seen on the workbench beside the exit sign.';
@@ -45,8 +46,11 @@ let browser;
  check(await page.locator('#room').textContent()==='ROOM —','pending caption must clear previous room');
  latest=null;await page.waitForTimeout(1200);check(!await page.locator('#scanState').evaluate(e=>e.classList.contains('busy')),'standby must clear analyzing styling');
  latest=first;await page.getByText('red helmet',{exact:true}).waitFor();
- async function ask(question){await page.locator('#q').fill(question);await page.locator('#askForm').evaluate(e=>e.requestSubmit());}
- await ask('Where is my helmet?');await page.getByText(answer,{exact:false}).waitFor();
+ async function openAsk(){if(await page.locator('#askForm').isHidden()){await page.locator('#q').blur();await page.keyboard.press('/');}}
+ async function ask(question){await openAsk();await page.locator('#q').fill(question);await page.locator('#askForm').evaluate(e=>e.requestSubmit());}
+ await ask('Where is my helmet?');await page.waitForFunction(a=>document.getElementById('transcript').textContent.includes(a),answer);
+ check(!await page.locator('.subs').isVisible(),'subtitles must be hidden by default');
+ await page.keyboard.press('t');check(await page.locator('.subs').isVisible()&&await page.locator('.subs').textContent().then(t=>t.includes(answer)),'T must show the answer as a subtitle');await page.keyboard.press('t');
  check(await page.locator('#evidence').isVisible(),'find answer must include evidence');
  check(new URL(await page.locator('#heroImg').getAttribute('src'),'http://localhost').pathname==='/frames/f_000001.jpg','find must show matched photo');
  check(await page.locator('#transcript').textContent().then(t=>t.includes(answer)),"Paul's full find answer must remain visible");
@@ -88,7 +92,7 @@ let browser;
  previewMode='live';await page.locator('#liveChip').waitFor({state:'visible'});check((await page.locator('#live').getAttribute('src')).startsWith('blob:'),'live preview must use received frame');
  previewMode='empty';await page.locator('#liveChip').waitFor({state:'hidden'});await page.waitForFunction(()=>document.getElementById('live').getAttribute('src')?.startsWith('/frames/'));
  offline=true;await page.getByText('LINK LOST',{exact:true}).waitFor();offline=false;await page.getByText('LINK OK',{exact:true}).waitFor();
- await page.locator('#q').fill('remember');await page.locator('#q').focus();await page.keyboard.press('r');check(resetCount===0,'R typed into question must not clear memory');await page.locator('#q').blur();
+ await openAsk();await page.locator('#q').fill('remember');await page.locator('#q').focus();await page.keyboard.press('r');check(resetCount===0,'R typed into question must not clear memory');await page.locator('#q').blur();
  askMode='slow';await ask('slow answer');await page.locator('#q').blur();
  await page.keyboard.press('r');await page.waitForTimeout(50);check(resetCount===0,'reset must wait until a pending answer/registration finishes');
  await page.waitForTimeout(1300);await page.keyboard.press('r');await page.waitForTimeout(50);check(await page.locator('#q').isDisabled(),'reset should block new questions until complete');
@@ -96,7 +100,7 @@ let browser;
  const previewAtHide=previewCalls;const atHide=latestCalls;await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pagehide',{persisted:true})));await page.waitForTimeout(1100);const before=latestCalls;check(before===atHide,'leaving page must stop feed polling');check(previewCalls===previewAtHide,'leaving page must stop preview polling');
  await page.evaluate(()=>window.dispatchEvent(new PageTransitionEvent('pageshow',{persisted:true})));await page.waitForTimeout(1100);check(latestCalls>before,'restored page must resume polling');
  for(const viewport of [{width:1280,height:720},{width:1024,height:768},{width:390,height:844}]){await page.setViewportSize(viewport);check(!await page.locator('body').evaluate(e=>e.scrollWidth>innerWidth),`HUD overflows horizontally at ${viewport.width}`);}
- await page.locator('#q').click(); // New gesture resumes recognition after page restoration.
+ await openAsk();await page.locator('#q').click(); // New gesture resumes recognition after page restoration.
  await page.evaluate(()=>window.testSpeech.recognizers.at(-1)?.onerror({error:'not-allowed'}));
  check(await page.locator('#micChip').textContent()==='MIC BLOCKED','permission-denied microphone must be indicated');
  check(await page.locator('#q').isEnabled(),'typed fallback must work when microphone is blocked');

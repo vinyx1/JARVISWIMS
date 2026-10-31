@@ -1,4 +1,5 @@
-// Laptop HUD. Owner: Jogindar (A). Live feed via GET /latest, questions via voice or typing.
+// Laptop HUD. Owner: Jogindar (A); glass redesign by Paul. Live feed via GET /latest + /preview.jpg,
+// questions via voice (or / to type). Jarvis answers out loud; text shows only as subtitles (T).
 import { createApi } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
 import { createVoice } from './voice.js';
@@ -20,24 +21,28 @@ function showLatest(entry, { linked = true } = {}) {
   $('frameChip').textContent = `FRAMES ${entry ? parseInt(entry.id.replace(/\D/g, ''), 10) + 1 : 0}`;
   if (linked) { $('linkChip').textContent = 'LINK OK'; $('linkChip').classList.add('ok'); $('linkChip').classList.remove('bad'); }
   if (!path) {
-    if (!previewLive()) { $('live').hidden = true; $('idle').hidden = false; }
+    if (!previewLive()) { $('live').hidden = true; $('liveBg').hidden = true; $('idle').hidden = false; }
     $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren();
     $('scanState').textContent = 'STANDBY'; $('scanState').classList.remove('busy'); $('age').textContent = '—'; return;
   }
   const src = `${path}?v=${entry.ts}`;
-  if (!previewLive() && $('live').getAttribute('src') !== src) $('live').src = src;
-  $('live').hidden = false; $('idle').hidden = true;
+  if (!previewLive() && $('live').getAttribute('src') !== src) setLive(src);
+  $('live').hidden = false; $('liveBg').hidden = false; $('idle').hidden = true;
   $('age').textContent = formatSeenAt(entry.ts).toUpperCase();
   const c = entry.caption;
   if (!c) { $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren(); $('scanState').textContent = 'ANALYZING…'; $('scanState').classList.add('busy'); return; }
   $('scanState').textContent = 'SCANNING'; $('scanState').classList.remove('busy');
   $('room').textContent = `ROOM ${(c.room_guess || 'unknown').toUpperCase()}`;
   $('scene').textContent = c.scene || '';
+  // gold squares = movable objects (things you can lose), cyan outlines = landmarks
   $('objects').replaceChildren(
-    ...(c.objects || []).slice(0, 6).map(o => el('span', 'tag obj', o)),
-    ...(c.landmarks || []).slice(0, 4).map(l => el('span', 'tag mark', l)),
+    ...(c.objects || []).slice(0, 5).map(o => el('li', 'obj', o)),
+    ...(c.landmarks || []).slice(0, 3).map(l => el('li', 'mark', l)),
   );
 }
+
+// the frame on top plus its blurred copy that fills the rest of the screen
+function setLive(src) { $('live').src = src; $('liveBg').src = src; }
 
 // ---------- live preview (~5 fps from the phone, display only) ----------
 let previewAt = 0, previewUrl = null, previewTimer = null, previewController = null;
@@ -64,7 +69,7 @@ async function pollPreview(token) {
       if (!previewWanted || token !== previewGeneration) return;
       if (blob.type.startsWith('image/')) {
         const url = URL.createObjectURL(blob);
-        $('live').src = url; $('live').hidden = false; $('idle').hidden = true;
+        setLive(url); $('live').hidden = false; $('liveBg').hidden = false; $('idle').hidden = true;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = url; previewAt = Date.now();
       }
@@ -191,26 +196,48 @@ async function ask(question) {
 const MIC = { listening: 'MIC LIVE · SAY "JARVIS"', armed: 'LISTENING…', ptt: 'PUSH-TO-TALK', denied: 'MIC BLOCKED', unsupported: 'NO VOICE · TYPE', off: 'MIC OFF' };
 const voice = createVoice({
   onQuestion: ask,
-  onState: s => { $('micChip').textContent = MIC[s] || s; $('micChip').classList.toggle('ok', s === 'listening' || s === 'armed' || s === 'ptt'); $('micChip').classList.toggle('hot', s === 'armed' || s === 'ptt'); },
+  onState: s => {
+    $('micChip').textContent = MIC[s] || s;
+    $('micChip').classList.toggle('ok', s === 'listening' || s === 'armed' || s === 'ptt');
+    $('micChip').classList.toggle('hot', s === 'armed' || s === 'ptt');
+    document.body.classList.toggle('listening', s === 'armed' || s === 'ptt');
+  },
   onHeard: (text, interim) => { $('heard').textContent = interim ? `… ${text}` : ''; },
+  onLevel: level => document.documentElement.style.setProperty('--level', level.toFixed(3)),
 });
 
 // Chrome needs a user gesture before audio/mic: start on the first click or key press.
 let started = false;
-function boot() { if (started || resetting) return; started = true; voice.start(); voice.speak('Good evening, sir. Ready when you are.'); }
+const GREETING = 'Good evening, sir. Ready when you are.';
+function boot() {
+  if (started || resetting) return;
+  started = true; document.body.classList.remove('booting');
+  voice.preload(['Sir?', ...FILLERS, "I'm afraid I've lost the connection to the suit cameras, sir."]);
+  voice.start(); voice.speak(GREETING);
+}
 document.addEventListener('click', boot);
 
 // ---------- keys + typed fallback ----------
+// Space hold-to-talk · / type a question · T subtitles · R reset · Esc close
 const typing = () => document.activeElement === $('q');
+function openAsk() { $('askForm').hidden = false; $('q').focus(); }
+function closeAsk() { $('q').blur(); $('askForm').hidden = true; }
 document.addEventListener('keydown', async e => {
-  if (typing() || resetting) return;
+  if (typing()) { if (e.key === 'Escape') closeAsk(); return; }
+  if (resetting) return;
   boot();
+  const plain = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey;
   if (e.code === 'Space') { e.preventDefault(); if (!e.repeat) voice.pushToTalk(true); }
-  if ((e.key === 'r' || e.key === 'R') && !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey) await reset();
-  if (e.key === 'Escape') $('evidence').hidden = true;
+  if (e.key === '/' && plain) { e.preventDefault(); openAsk(); }
+  if ((e.key === 't' || e.key === 'T') && plain) {
+    const on = document.body.classList.toggle('subs-on');
+    toast(on ? 'SUBTITLES ON' : 'SUBTITLES OFF');
+  }
+  if ((e.key === 'r' || e.key === 'R') && plain) await reset();
+  if (e.key === 'Escape') { $('evidence').hidden = true; closeAsk(); }
 });
 document.addEventListener('keyup', e => { if (!typing() && e.code === 'Space') voice.pushToTalk(false); });
-$('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) return; boot(); const q = $('q').value.trim(); if (!q) return; $('q').value = ''; $('q').blur(); ask(q); };
+$('askForm').onsubmit = e => { e.preventDefault(); if (asking || resetting) return; boot(); const q = $('q').value.trim(); if (!q) return; $('q').value = ''; closeAsk(); ask(q); };
 
 async function reset() {
   if (resetting) return;
