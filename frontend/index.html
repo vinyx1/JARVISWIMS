@@ -1,0 +1,26 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Echo</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <!-- Owner: Person A. Skeleton only: camera loop, ask box, answer + breadcrumbs. -->
+  <h1>👻 Echo</h1>
+  <video id="cam" autoplay playsinline muted></video>
+  <canvas id="grab" hidden></canvas>
+  <button id="start">Begin haunting</button>
+  <p id="status">idle</p>
+
+  <form id="askForm">
+    <input id="q" placeholder="where's my jacket?" autocomplete="off">
+    <button>Ask</button>
+  </form>
+  <p id="answer"></p>
+  <div id="frames"></div>
+
+  <script src="app.js"></script>
+</body>
+</html>

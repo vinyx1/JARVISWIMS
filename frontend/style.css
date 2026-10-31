@@ -1,0 +1,4 @@
+body { background: #0b0b10; color: #d8d4e8; font-family: system-ui, sans-serif; margin: 0; padding: 16px; }
+video { width: 100%; max-width: 480px; border-radius: 8px; }
+#frames { display: flex; gap: 8px; overflow-x: auto; }
+#frames img { height: 120px; border-radius: 6px; }
