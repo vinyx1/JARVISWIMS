@@ -2,8 +2,12 @@
 
 The live test worked end to end. It found three problems. Each task below stays in its
 owner's files from `CLAUDE.md`. The contract changes are already in `API.md`.
-**Target: everything merged by 1:45**, so there's time to rehearse before the 2:15 freeze.
-Paul switches to the pitch at 1:30 as planned.
+Original schedule: merge by 1:45, Paul switches to pitch at 1:30, code freeze at 2:15.
+
+**Status reviewed against `main` at `8c09f06` (31 October 2026).** Checked boxes mean
+implemented in the merged code; they do not certify real-device or model accuracy.
+Jogindar's frontend PR #19 and Paul's glass HUD are merged. The main remaining code work is
+Paul's registered-item answering and ambiguity handling. Real demo validation remains open.
 
 ## What the test showed
 
@@ -30,7 +34,7 @@ Paul switches to the pitch at 1:30 as planned.
   → image = newest preview (what the camera sees now), else the newest frame;
     it's saved as a normal frame so it has a url
   → ai.describe_item(jpeg, "laptop") → "silver MacBook with a pumpkin sticker on the lid"
-  → store.remember("laptop", description, frame_id)   → data/mine.json
+  → store.remember("laptop", description, frame)   → data/mine.json
   → reply {answer: "Noted, sir. Your laptop: a silver MacBook with a pumpkin sticker.",
            kind: "remember", frames: [that frame]}
 Later frames: ai.caption_frame(jpeg, mine) → objects include "MY laptop (silver MacBook, pumpkin sticker) on table"
@@ -39,61 +43,80 @@ Later asks:   answer.answer(question, log, mine) → "my laptop" means the regis
 
 ## Kenny (C): `backend/ai.py`, `prompts/caption.md`
 
-- [ ] **Distinct captions.** Name things correctly: monitor, laptop and TV are different
-  nouns, so add `monitor` to the plain-noun list. Add one detail that tells similar items
-  apart: brand, stickers, size, what's on the screen, or what's next to it. For example,
-  "black Dell monitor on left desk showing code", not "laptop on table". Test this on the
-  run-1 frames (Vince has a copy) before changing anything else.
-- [ ] **`describe_item(jpeg: bytes, item: str) -> str`** (new). One short phrase that
-  identifies *this* item for later recognition. On any error, return `item` itself.
-- [ ] **`caption_frame(jpeg: bytes, mine: list[dict] = ()) -> dict`.** The new parameter
-  is optional, so nothing breaks before Vince wires it in. If the frame shows one of
-  `mine` (`{item, description}`), write it as `"MY <item> (<description>) <where>"`.
-  Only do this when you're confident it's the same item; otherwise caption it normally.
-- [ ] Tell Paul the exact `MY ...` wording once it's settled.
-- [ ] Shrink and rename your `samples/` PR (#14) when you have time: ~1280px wide, folder
-  names without spaces, and drop `.vscode/`.
+- [x] **Distinct caption rules:** monitor/laptop/TV distinction and one identifying detail
+  are in `prompts/caption.md`.
+- [x] **`describe_item(jpeg, item)`** identifies an item and falls back to the item name
+  when the model request fails.
+- [x] **`caption_frame(jpeg, mine=())`** accepts registered items and reference images.
+  Confident matches use `MY <item> (<description copied exactly>) <where it is>`;
+  `_exact_mine` normalizes the registered description.
+- [ ] Verify distinct captions and MY tagging against Vince's run-1 photos and two similar
+  real objects. Record the results; implementation alone does not prove recognition quality.
+- [ ] Confirm Paul has adopted the exact MY wording above in his answer prompt.
+- [ ] Confirm sample cleanup from PR #14 is complete, including image dimensions.
+  Current tracked sample folders have no spaces and no `.vscode/` files are tracked.
 
-## Paul (D): `backend/answer.py`, `prompts/answer.md`, `tests/**` (before 1:30)
+## Paul (D): `backend/answer.py`, `prompts/answer.md`, `tests/**`
 
-- [ ] **`answer(question, log, mine: list[dict] = ())`.** Optional new parameter. Put the
-  registered items in the prompt.
-- [ ] **"my X" means the registered X.** Prefer frames whose objects say `MY <item>` or
-  match its description. If X isn't registered, behave as today.
-- [ ] **More than one match:** don't silently pick one. Say so briefly and return both
-  frames: "I've seen two monitors, sir: the black one on the left desk a minute ago, and a
-  wall TV by the door. The first is likelier yours." If one clearly matches the question's
-  details ("the Dell monitor"), pick it.
-- [ ] Add a test with two similar items, one of them `MY ...`.
-- [ ] 1:30 → pitch, Devpost, backup video. Feature to show off: "this is my laptop".
+- [ ] **`answer(question, log, mine: list[dict] = ())`:** add the optional parameter and
+  put registered items in the prompt. Current `answer()` still accepts only question/log;
+  Vince's signature-aware caller will pass `mine` once this lands.
+- [ ] **"my X" means the registered X:** prefer frames tagged `MY <item>` or matching
+  its registered description. If X is unregistered, retain the existing behavior.
+- [ ] **Multiple plausible matches:** briefly explain the ambiguity and return the
+  candidate frames rather than silently choosing one. A specific identifying detail
+  should select the matching item. The frontend candidate picker is already merged.
+- [ ] Add tests with two similar items, one registered, plus an ambiguous query that
+  returns multiple valid frame references.
+- [ ] Confirm pitch, Devpost and backup video are ready. Demonstrate "this is my laptop"
+  followed by finding that same laptop among look-alikes.
 
 ## Jogindar (A): `frontend/**`
 
-- [ ] **Smoother feed** (`capture.js`, `app.js`): allow 2–3 preview uploads in flight,
-  send every ~80–100ms at 360px and quality ~0.45, and have the HUD poll
-  `/preview.jpg` every ~70ms while live. Only show a frame if it's newer than the one on
-  screen. Send `ts` with each preview, and the backend will drop stale ones. Check it on
-  the real iPhone through the tunnel; the target is ~10+ fps.
-- [ ] **`kind: "remember"`:** show the photo with a gold `REGISTERED · MY LAPTOP` title
-  instead of LAST SEEN, and no route strip.
-- [ ] **MY ITEMS** list in the Jarvis panel, from `GET /mine` (load on start, after each
-  remember, and after R).
-- [ ] When an answer has 2+ frames for `find`, show them side by side as options.
+- [x] **Smoother feed implementation:** phone previews every 100ms at 360px / quality
+  0.45, up to three uploads in flight, timestamped requests, and serial HUD preview
+  polling every 70ms while live. Backend rejects older uploads.
+- [ ] Measure actual preview FPS on the real iPhone through the tunnel; target ~10+ FPS.
+  Synthetic concurrency checks do not establish real-device throughput.
+- [x] **Remember reply:** gold `REGISTERED · MY <ITEM>` heading and photo, without a route strip.
+- [x] **MY ITEMS:** loads `GET /mine` on startup, after remember, after reset and on restoration.
+- [x] **Multiple find candidates:** side-by-side selectable photos update the evidence image.
+- [x] **Selected-object outline:** normalized `frames[].box` draws a gold rectangle on
+  the matching evidence photo; invalid/missing boxes preserve the normal answer/photo.
+- [x] Retain round-two features with Paul's merged glass HUD.
+- [ ] Recheck phone capture, HUD layout, microphone and voice on the final projector setup.
 
 ## Vince (B): `backend/main.py`, `backend/store.py`, `scripts/**`
 
-- [ ] **Remember routing in `/ask`:** a regex for "this is my X", "that's my X",
-  "remember this/my X" and "X is mine", then the flow above. Use the preview frame if it's
-  live, otherwise the newest frame. If there's no image, reply: "I can't see anything yet,
-  sir."
-- [ ] **`store`:** `remember(item, description, frame_id)` and `mine()`, persisted to
-  `data/mine.json`. `reset()` clears it too.
-- [ ] **`GET /mine`.** Pass `store.mine()` into `caption_frame` and `answer` (keyword
-  arguments, so the code works before Kenny and Paul land their changes).
-- [ ] **`/preview`:** accept an optional `ts`, and ignore any frame older than the one held.
-- [ ] Smoke test: add one remember question, then rerun the live test with two laptops.
+- [x] **Remember routing:** regex detection, current preview with saved-frame fallback,
+  item description, registration and a no-image response are implemented.
+- [x] **Store:** `remember(item, description, frame)` and `mine()` persist to `data/mine.json`;
+  `reset()` clears registrations too. The implementation takes a frame dict, not just its ID.
+- [x] **`GET /mine` and wiring:** registrations reach captions; signature-aware calling
+  passes them to answers once Paul's optional `mine` parameter exists.
+- [x] **Timestamped `/preview`:** older uploads are ignored.
+- [x] **Smoke script:** includes remember registration, `/mine` and reset checks.
+- [x] **Object boxes:** `/ask` calls `ai.locate_object` for selected evidence frames and
+  attaches normalized boxes, with timeout/failure fallback. `JARVIS_BOX=0` disables it.
+- [x] **Voice and stage setup:** `/speak` supports ElevenLabs with browser fallback;
+  `scripts/demo.sh` starts the demo server and tunnel.
+- [ ] Rerun the smoke test and full two-laptop flow on the actual demo machine with keys.
+- [ ] Verify outline accuracy and answer latency on real photos; disable boxes if too slow.
+- [ ] Verify reset cannot let an old in-flight caption or registration repopulate a new
+  session. Until protected server-side, stop phone capture and wait for pending work
+  before resetting; the HUD's local guard cannot cover other clients.
 
-## Merge order
+## Verification and final rehearsal
 
-Vince's backend changes merge first: the defaults mean nothing breaks. Kenny, Paul and
-Jogindar can merge in any order after that. Run `scripts/smoke.py` before each merge.
+- Automated baseline at `8c09f06`: **20 frontend tests and 28 backend tests pass**.
+  These checks do not exercise real provider calls, iPhone/tunnel FPS or venue acoustics.
+- [ ] On Vince's setup: capture two look-alike laptops, register one, move it, then ask
+  "where's my laptop?". Check the correct evidence, MY ITEMS, outline and spoken reply.
+- [ ] Ask an ambiguous query and confirm multiple candidates once Paul's changes land.
+- [ ] Test wake word, hold-Space and typed fallback in venue noise; check projector readability.
+- [ ] Complete rehearsals and record a backup video.
+
+Paul's answer changes are the remaining dependency for registered-item retrieval.
+Run `scripts/smoke.py` before and after integration as required by `CLAUDE.md`.
+**The smoke script resets memory:** use a disposable backend or intentionally cleared
+rehearsal session, never a session whose captured data must be preserved.

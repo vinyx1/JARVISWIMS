@@ -928,33 +928,39 @@ progress {
 .remote-frame { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
 .feed-status { font-size:10px; line-height:1.7; color:#a2ada8; min-height:17px; margin:10px 0 6px; }
 .capture-page-link { font-size:10px; color:var(--accent); text-underline-offset:4px; }
-.phone-capture { min-height:100dvh; }
-.capture-shell { max-width:520px; padding:26px 22px; margin:auto; }
-.capture-shell header { display:flex; align-items:center; justify-content:space-between; }
-.capture-shell header a { font-size:10px; color:var(--accent); text-decoration:none; }
-.capture-shell h1 { font-size:36px; font-weight:450; letter-spacing:-1.3px; line-height:1.15; margin:32px 0 16px; }
-.capture-shell>p { font-size:12px; color:#a4adb3; line-height:1.8; }
-.capture-shell .preview { margin:24px 0; }
-.capture-shell .capture-controls { max-width:none; margin:18px 0; }
-.capture-shell .button { min-height:52px; font-size:14px; }
-.capture-shell #phoneStatus { min-height:45px; }
-.capture-shell #phoneStatus.error { color:var(--danger); }
-
-/* ---------- phone held sideways: big preview left, controls right (Paul) ---------- */
-@media (orientation: landscape) and (max-height: 600px) {
-  .capture-shell { max-width: none; height: 100dvh; margin: 0; padding: 10px max(14px, env(safe-area-inset-right)) 10px max(14px, env(safe-area-inset-left));
-    display: grid; grid-template-columns: minmax(0, 1fr) 220px; grid-template-rows: auto auto auto auto 1fr; gap: 8px 16px; }
-  .capture-shell header { grid-column: 1 / -1; }
-  .capture-shell h1, .capture-shell > p:not(#phoneStatus), .capture-shell .fine-print { display: none; }
-  .capture-shell .preview { grid-column: 1; grid-row: 2 / -1; margin: 0; max-width: none; aspect-ratio: auto; min-height: 0; }
-  .capture-shell .preview video { object-fit: contain; background: #000; }
-  .capture-shell .field-label, .capture-shell #phoneDevice, .capture-shell .capture-controls, .capture-shell #phoneStatus { grid-column: 2; margin: 0; }
-  .capture-shell .capture-controls { flex-direction: column; }
-  .capture-shell .button { min-height: 44px; }
-  .capture-shell #phoneStatus { min-height: 0; font-size: 11px; }
-}
-/* held upright: the projector is wide, so ask for a sideways phone */
-@media (orientation: portrait) {
-  .capture-shell .preview::after { content: "↻  Turn the phone sideways for a wide view"; position: absolute; left: 0; right: 0; bottom: 0;
-    padding: 8px 10px; background: rgba(0, 0, 0, .7); color: #ffd27a; font-size: 12px; letter-spacing: .04em; text-align: center; }
+/* Phone capture: camera fills the viewport; controls float above it. */
+.phone-capture { margin:0; background:#080d12; overflow:hidden; }
+.phone-capture .capture-shell { position:relative; isolation:isolate; width:100%; height:100vh; height:100dvh; padding:0; margin:0; max-width:none; overflow:hidden; }
+.phone-capture .preview { position:absolute; inset:0; width:100%; height:100%; margin:0; max-width:none; border:0; border-radius:0; aspect-ratio:auto; background:radial-gradient(ellipse at center,#20343d,#080d12 75%); }
+.phone-capture .preview::before { display:none; }
+.phone-capture .preview video { position:absolute; inset:0; width:100%; height:100%; object-fit:cover; }
+.phone-topbar { position:absolute; z-index:1; top:0; left:0; right:0; display:flex; align-items:center; justify-content:space-between; gap:12px; padding:calc(16px + env(safe-area-inset-top)) max(20px,env(safe-area-inset-right)) 36px max(20px,env(safe-area-inset-left)); background:linear-gradient(#000b,transparent); }
+.phone-topbar .eyebrow { color:#e0f5ff; font-size:10px; letter-spacing:.15em; }
+.phone-topbar a { color:#e0f5ff; font-size:12px; padding:10px 12px; border:1px solid #a8d9ef55; border-radius:20px; text-decoration:none; background:#09151f99; }
+.phone-capture #phoneBadge { right:auto; position:absolute; z-index:1; top:calc(80px + env(safe-area-inset-top)); left:max(20px,env(safe-area-inset-left)); background:#071119cc; color:#e0f5ff; border:1px solid #8ecbe455; border-radius:20px; padding:8px 12px; }
+.phone-panel { position:absolute; z-index:2; bottom:max(14px,env(safe-area-inset-bottom)); left:max(14px,env(safe-area-inset-left)); right:max(14px,env(safe-area-inset-right)); max-width:480px; margin:0 auto; padding:18px; border:1px solid #acd5e54a; border-radius:22px; background:#08131de8; box-shadow:0 12px 40px #0006; backdrop-filter:blur(18px); -webkit-backdrop-filter:blur(18px); max-height:calc(100% - 140px - env(safe-area-inset-top)); overflow:auto; }
+.phone-panel-heading { display:flex; align-items:center; justify-content:space-between; gap:10px; }
+.phone-panel h1 { margin:0; color:#eef9ff; font-size:20px; font-weight:500; letter-spacing:-.5px; }
+.phone-rotate { font-size:10px; color:#b6d5e2; }
+.phone-panel #phoneStatus { margin:10px 0 14px; min-height:34px; font-size:12px; line-height:1.5; color:#c8dce6; overflow-wrap:anywhere; }
+.phone-panel #phoneStatus.error { color:#ffb2a9; }
+.phone-panel .field-label { display:block; margin:0 0 7px; font-size:9px; color:#a9c7d5; }
+.phone-panel select { width:100%; min-height:44px; padding:10px 12px; border:1px solid #9cbfce55; border-radius:10px; color:#eef8ff; background:#122531; font-size:16px; }
+.phone-panel .capture-controls { display:flex; gap:10px; margin:12px 0 0; max-width:none; }
+.phone-panel .button { min-height:50px; border-radius:12px; font-size:14px; }
+.phone-panel .primary { flex:2; background:#bdeaff; border-color:#bdeaff; color:#092031; }
+.phone-panel .secondary { flex:1; background:#152733; border-color:#9cbfce55; color:#eef8ff; }
+.phone-panel .button:disabled { opacity:.45; }
+.phone-panel :focus-visible,.phone-topbar a:focus-visible { outline:2px solid #ffcf73; outline-offset:3px; }
+.phone-info { margin-top:12px; color:#b7cdd8; font-size:11px; }
+.phone-info summary { cursor:pointer; padding:5px 0; }
+.phone-info p { margin:8px 0 0; font-size:11px; line-height:1.6; }
+@media (orientation:landscape) and (max-height:600px) {
+  .phone-panel { left:auto; width:300px; padding:14px; bottom:max(10px,env(safe-area-inset-bottom)); max-height:calc(100% - 90px - env(safe-area-inset-top)); }
+  .phone-panel h1 { font-size:17px; }
+  .phone-rotate { display:none; }
+  .phone-panel #phoneStatus { min-height:0; margin:8px 0; }
+  .phone-panel .capture-controls { margin-top:10px; }
+  .phone-panel .button { min-height:44px; }
+  .phone-info { margin-top:7px; }
 }
