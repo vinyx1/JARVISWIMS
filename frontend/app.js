@@ -164,8 +164,19 @@ function showEvidence(result) {
   if (result.kind === 'remember') void refreshMine();
 }
 
+// Late boxes: copy them onto the frames already on screen (candidate buttons hold these same
+// objects), then outline the photo currently shown.
+function applyLateBoxes(result){
+  if(!activeEvidence)return;
+  const byId=new Map((result.frames||[]).map(f=>[f.id,f]));
+  for(const f of activeEvidence.frames){const box=byId.get(f.id)?.box;if(box)f.box=box;}
+  const src=$('heroImg').getAttribute('src')||'';
+  const shown=activeEvidence.frames.find(f=>src.includes(`/frames/${f.id}.jpg`));
+  if(shown?.box)objectOverlay.set(shown.box);
+}
+
 // ---------- phone exchanges: display only, never open the HUD microphone ----------
-let interactionId=null, firstExchange=true;
+let interactionId=null, firstExchange=true, boxShown=false;
 // Optional: the laptop speaks the reply (Mac speakers / projector) instead of the phone. Key V.
 // The phone then picks "Jarvis speaks on: The laptop" so the reply isn't heard twice.
 let laptopVoice=false, laptopAudio=null;
@@ -187,8 +198,12 @@ const interactions=createLatestPoller({
   load:()=>api.getInteraction(),
   onUpdate(exchange){
     if(!exchange){interactionId=null;hideEvidence();return;}
-    if(exchange.id===interactionId)return;
-    interactionId=exchange.id;
+    if(exchange.id===interactionId){
+      // Answer first, outline later: the server adds the gold box ~1-2s after the reply. Draw it, don't re-speak.
+      if(exchange.boxed&&!boxShown){boxShown=true;applyLateBoxes(exchange.result);}
+      return;
+    }
+    interactionId=exchange.id;boxShown=!!exchange.boxed;
     // The phone's 'Jarvis speaks on: the laptop' arrives with the exchange; V forces it on this laptop too.
     if((exchange.speak_on==='laptop'||exchange.speak_on==='both'||laptopVoice)&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
     firstExchange=false;
