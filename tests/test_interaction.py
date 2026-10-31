@@ -46,3 +46,18 @@ def test_reset_waits_for_phone_answer_before_clearing_exchange(monkeypatch):
         main.reset()
         assert main.interaction() is None
     asyncio.run(run())
+
+
+def test_phone_choice_of_speaker_is_relayed_to_the_hud(monkeypatch):
+    import asyncio
+    result = {'answer': 'On the chair, sir.', 'kind': 'find', 'frames': []}
+    monkeypatch.setattr(main, '_answer_request', AsyncMock(return_value=result), raising=False)
+    monkeypatch.setattr(main.store, 'reset', lambda: None)
+    main.reset()
+    asyncio.run(main.ask(main.Ask(question='Where is my helmet?', speak_on='laptop')))
+    assert main.interaction()['speak_on'] == 'laptop'
+    asyncio.run(main.ask(main.Ask(question='Where is my wallet?', speak_on='both')))
+    assert main.interaction()['speak_on'] == 'both'
+    asyncio.run(main.ask(main.Ask(question='Where are my keys?')))
+    assert main.interaction()['speak_on'] == 'phone'      # default: the phone speaks, the HUD stays silent
+    main.reset()

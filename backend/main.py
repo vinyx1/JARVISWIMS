@@ -11,6 +11,7 @@ import threading
 import time
 import uuid
 from pathlib import Path
+from typing import Literal
 
 from dotenv import load_dotenv
 from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
@@ -64,6 +65,7 @@ async def frame(
 
 class Ask(BaseModel):
     question: str
+    speak_on: Literal["phone", "laptop", "both"] = "phone"   # where Jarvis says the reply (picked on the phone)
 
 
 # ---------- "this is my laptop, remember it" ----------
@@ -191,7 +193,8 @@ async def ask(body: Ask):
         result = await _answer_request(body)
         with _interaction_lock:
             if generation == _exchange_generation:
-                _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result}
+                _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result,
+                             "speak_on": body.speak_on}
         return result
     finally:
         with _interaction_lock:
