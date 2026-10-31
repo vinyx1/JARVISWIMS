@@ -1,5 +1,40 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><meta name="color-scheme" content="dark"><title>Suit camera · J.A.R.V.I.S.</title><link rel="stylesheet" href="style.css"></head>
-<body class="phone-capture"><main class="capture-shell"><header><span class="eyebrow">J.A.R.V.I.S. · SUIT CAMERA</span><a href="/">HUD ↗</a></header><h1>Suit cameras<br>online, sir.</h1><p>Hold the phone up and keep this page open. A photo goes to Jarvis every 3 seconds.</p><div class="preview"><video id="phoneVideo" autoplay playsinline muted aria-label="Phone camera preview"></video><span id="phoneBadge" class="live-label">CAMERA OFF</span></div><label class="field-label" for="phoneDevice">CAMERA SOURCE</label><select id="phoneDevice"><option value="">Rear camera (default)</option></select><div class="capture-controls"><button id="phoneStart" class="button primary" type="button">Start capture</button><button id="phoneStop" class="button secondary" type="button" disabled>Stop</button></div><p id="phoneStatus" role="status">Camera is off. Tap Start to allow camera access.</p><p class="fine-print">Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. On iPhone, open the HTTPS capture URL supplied by the demo host.</p></main><script type="module" src="capture.js"></script></body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Suit camera · J.A.R.V.I.S.</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="phone-capture">
+  <main class="capture-shell">
+    <div class="preview">
+      <video id="phoneVideo" autoplay playsinline muted aria-label="Phone camera preview"></video>
+    </div>
+    <header class="phone-topbar">
+      <span class="eyebrow">J.A.R.V.I.S. · SUIT CAMERA</span>
+      <a href="/">HUD ↗</a>
+    </header>
+    <span id="phoneBadge" class="live-label">CAMERA OFF</span>
+    <section class="phone-panel" aria-label="Camera controls">
+      <div class="phone-panel-heading">
+        <h1>Suit camera</h1>
+        <span class="phone-rotate">↻ Best held sideways</span>
+      </div>
+      <p id="phoneStatus" role="status">Camera is off. Tap Start to allow camera access.</p>
+      <label class="field-label" for="phoneDevice">CAMERA SOURCE</label>
+      <select id="phoneDevice"><option value="">Rear camera (default)</option></select>
+      <div class="capture-controls">
+        <button id="phoneStart" class="button primary" type="button">Start capture</button>
+        <button id="phoneStop" class="button secondary" type="button" disabled>Stop</button>
+      </div>
+      <details class="phone-info">
+        <summary>Capture &amp; privacy</summary>
+        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
+      </details>
+    </section>
+  </main>
+  <script type="module" src="capture.js"></script>
+</body>
 </html>
