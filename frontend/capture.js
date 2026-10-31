@@ -45,15 +45,23 @@ const preview=createPreviewSender({
 
 // Phone owns voice; the laptop polls completed exchanges without recording or speaking.
 import {createPhoneConversation,createDeviceSpeaker} from './phone-voice.js';
+import {createWakeListener} from './wake.js';
 const questionApi=createApi({timeoutMs:25000});
 let lastReply='',playbackBlocked=false;
 const speaker=createDeviceSpeaker({onBlocked(){playbackBlocked=true;$('phoneVoiceStatus').textContent='Tap Play reply to allow audio, or read the answer below.';}});
 const voiceStates={ready:'Ready. Tap Talk for your next question.',listening:'Listening… speak, then pause. Tap again to finish.',thinking:'Checking the footage…',speaking:'Jarvis is replying on this device.',denied:'Microphone blocked. Allow access in browser settings, or type below.',unsupported:'Speech recognition is unavailable here. Type your question below.', 'no-speech':'No speech captured. Tap Talk to try again.', 'recognition-error':'Speech recognition failed. Try again or type below.',error:'Could not complete the question. Try again.',off:'Microphone and reply audio are off.'};
+const OUTPUT_KEY='jarvisOutput';
+try{const saved=localStorage.getItem(OUTPUT_KEY);if(saved)$('phoneOutput').value=saved;}catch{}
+$('phoneOutput').onchange=()=>{try{localStorage.setItem(OUTPUT_KEY,$('phoneOutput').value);}catch{}};
+const onLaptop=()=>$('phoneOutput').value==='laptop';
+const replySpeaker={unlock:()=>speaker.unlock(),stop:()=>speaker.stop(),play:text=>onLaptop()?Promise.resolve():speaker.play(text)};
 const phoneVoice=createPhoneConversation({
  Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- speaker,ask:question=>questionApi.askQuestion(question),
+ speaker:replySpeaker,ask:question=>questionApi.askQuestion(question),
  onState(state){
    if(!(state==='ready'&&playbackBlocked))$('phoneVoiceStatus').textContent=voiceStates[state]||state;
+   if(state==='speaking'&&onLaptop())$('phoneVoiceStatus').textContent='Jarvis is replying on the laptop.';
+   if(['ready','no-speech','recognition-error','error'].includes(state))resumeHandsFree();
    $('phoneTalk').textContent=state==='listening'?'Finish speaking':'Talk to Jarvis';
    const busy=state==='thinking'||state==='speaking';$('phoneTalk').disabled=busy;$('phoneAskForm').querySelector('button').disabled=busy;$('phoneReplay').disabled=busy;
  },
@@ -61,10 +69,22 @@ const phoneVoice=createPhoneConversation({
  onAnswer(result){lastReply=result.answer;playbackBlocked=false;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
  onError(error){$('phoneAnswer').textContent=error.message;}
 });
-$('phoneTalk').onclick=()=>{playbackBlocked=false;phoneVoice.listen();};
-$('phoneVoiceOff').onclick=()=>phoneVoice.cancel();
+$('phoneTalk').onclick=()=>{playbackBlocked=false;wake.stop();phoneVoice.listen();};
+// Hands-free: keep listening for "Jarvis …". Paused while Jarvis answers (an open iPhone mic can
+// route the reply to the quiet earpiece), resumed afterwards.
+const wake=createWakeListener({
+ Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
+ isBusy:()=>phoneVoice.busy,
+ onQuestion(question){wake.stop();playbackBlocked=false;$('phoneHandsFree').checked=true;void phoneVoice.submit(question);},
+ onState(state){if(state==='hands-free')$('phoneVoiceStatus').textContent='Hands-free: say "Hey Jarvis, …"';
+  if(state==='armed')$('phoneVoiceStatus').textContent='Yes, sir? Go ahead.';
+  if(state==='denied'){$('phoneHandsFree').checked=false;$('phoneVoiceStatus').textContent=voiceStates.denied;}}
+});
+function resumeHandsFree(){if($('phoneHandsFree').checked&&!wake.on&&!document.hidden)wake.start();}
+$('phoneHandsFree').onchange=()=>{speaker.unlock();if($('phoneHandsFree').checked)wake.start();else wake.stop();};
+$('phoneVoiceOff').onclick=()=>{phoneVoice.cancel();wake.stop();$('phoneHandsFree').checked=false;};
 $('phoneReplay').onclick=()=>{speaker.unlock();playbackBlocked=false;void speaker.play(lastReply);};
 $('phoneAskForm').onsubmit=e=>{e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question||phoneVoice.busy)return;$('phoneQuestion').value='';playbackBlocked=false;void phoneVoice.submit(question);};
 if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){$('phoneTalk').disabled=true;$('phoneVoiceStatus').textContent=voiceStates.unsupported;}
-document.addEventListener('visibilitychange',()=>{if(document.hidden)phoneVoice.cancel();});
-window.addEventListener('pagehide',()=>phoneVoice.cancel());
+document.addEventListener('visibilitychange',()=>{if(document.hidden){phoneVoice.cancel();wake.stop();}});
+window.addEventListener('pagehide',()=>{phoneVoice.cancel();wake.stop();});

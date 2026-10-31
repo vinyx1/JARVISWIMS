@@ -36,6 +36,11 @@
           <button id="phoneTalk" class="button primary" type="button">Talk to Jarvis</button>
           <button id="phoneVoiceOff" class="button secondary" type="button">Mute / cancel</button>
         </div>
+        <div class="phone-voice-options">
+          <label class="phone-toggle"><input id="phoneHandsFree" type="checkbox"> Hands-free: just say "Hey Jarvis, …"</label>
+          <label class="field-label" for="phoneOutput">JARVIS SPEAKS ON</label>
+          <select id="phoneOutput"><option value="phone">This phone</option><option value="laptop">The laptop (Mac speakers)</option></select>
+        </div>
         <p id="phoneHeard" class="phone-heard" aria-live="polite"></p>
         <p id="phoneAnswer" class="phone-answer" aria-live="polite"></p>
         <button id="phoneReplay" class="button secondary" type="button" hidden>Play reply</button>

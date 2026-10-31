@@ -165,23 +165,44 @@ function showEvidence(result) {
 }
 
 // ---------- phone exchanges: display only, never open the HUD microphone ----------
-let interactionId=null;
+let interactionId=null, firstExchange=true;
+// Optional: the laptop speaks the reply (Mac speakers / projector) instead of the phone. Key V.
+// The phone then picks "Jarvis speaks on: The laptop" so the reply isn't heard twice.
+let laptopVoice=false, laptopAudio=null;
+try{laptopVoice=localStorage.getItem('jarvisLaptopVoice')==='1';}catch{}
+function showVoiceChip(){$('micChip').textContent=laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE';$('micChip').classList.toggle('ok',laptopVoice);}
+async function speakOnLaptop(text){
+  laptopAudio?.pause();window.speechSynthesis?.cancel();
+  try{
+    const r=await fetch('/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
+    if(r.ok&&r.headers.get('content-type')?.startsWith('audio/')){
+      const url=URL.createObjectURL(await r.blob());laptopAudio=new Audio(url);laptopAudio.onended=()=>URL.revokeObjectURL(url);
+      await laptopAudio.play();return;
+    }
+  }catch{/* fall back to the browser voice */}
+  if(window.speechSynthesis&&window.SpeechSynthesisUtterance){const u=new SpeechSynthesisUtterance(text);u.lang='en-GB';window.speechSynthesis.speak(u);}
+}
 const interactions=createLatestPoller({
   load:()=>api.getInteraction(),
   onUpdate(exchange){
     if(!exchange){interactionId=null;hideEvidence();return;}
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
+    if(laptopVoice&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
+    firstExchange=false;
     say('you',exchange.question);say('jarvis',exchange.result.answer);
     showEvidence(exchange.result);
   },
   onError(){ /* Camera status remains independent; a later poll can recover. */ }
 });
-$('micChip').textContent='VOICE ON PHONE';
+// the first poll may return an answer from before this page loaded: never speak that one
+setTimeout(()=>{firstExchange=false;},2500);
+showVoiceChip();
 document.body.classList.remove('booting');
 document.addEventListener('keydown',async e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable||resetting)return;
   const plain=!e.repeat&&!e.metaKey&&!e.ctrlKey&&!e.altKey;
+  if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopVoice',laptopVoice?'1':'0');}catch{}showVoiceChip();toast(laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE');}
   if((e.key==='t'||e.key==='T')&&plain){const on=document.body.classList.toggle('subs-on');toast(on?'SUBTITLES ON':'SUBTITLES OFF');}
   if((e.key==='r'||e.key==='R')&&plain)await reset();
   if(e.key==='Escape')$('evidence').hidden=true;
