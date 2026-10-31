@@ -9,8 +9,16 @@ function setup(){
  const voice=createVoice({onState:s=>states.push(s),onQuestion:q=>questions.push(q)});
  return {voice,instances,spoken,states,questions,synth};
 }
-test('wake word submits only the question and uses British output',()=>{
- const {voice,instances,questions,spoken}=setup();voice.start();instances[0].emit('Jarvis, where is my helmet?');assert.deepEqual(questions,['where is my helmet?']);voice.speak('Very good, sir.');assert.equal(spoken[0].lang,'en-GB');voice.stop();
+test('wake word submits only the question and uses British output',async()=>{
+ // /speak tried first; when it has no audio (204), the browser's British voice speaks.
+ const realFetch=globalThis.fetch;globalThis.fetch=async()=>({status:204});
+ try{
+  const {voice,instances,questions,spoken}=setup();voice.start();instances[0].emit('Jarvis, where is my helmet?');assert.deepEqual(questions,['where is my helmet?']);voice.speak('Very good, sir.');
+  await new Promise(r=>setTimeout(r,20));assert.equal(spoken[0].lang,'en-GB');voice.stop();
+ }finally{globalThis.fetch=realFetch;}
+});
+test('a frozen speechSynthesis (speaking stuck true) does not make Jarvis deaf',()=>{
+ const {voice,instances,questions,synth}=setup();synth.speaking=true;voice.start();instances[0].emit('Jarvis, where is my helmet?');assert.deepEqual(questions,['where is my helmet?']);voice.stop();
 });
 test('stopping during a queued recognition restart does not reopen the microphone',async()=>{
  const {voice,instances}=setup();voice.start();instances[0].onend();voice.stop();await new Promise(r=>setTimeout(r,300));assert.equal(instances.length,1);

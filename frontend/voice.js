@@ -13,7 +13,7 @@ const SPEAK_TIMEOUT_MS = 2500;
 export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}, onLevel = () => {} }) {
   const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
   let rec = null, wanted = false, ptt = false, pttText = '', armedUntil = 0, voice = null, restartTimer = null, releaseTimer = null, blocked = false;
-  let remote = false, queue = Promise.resolve(), generation = 0, playing = null, levelRaf = 0, audioCtx = null, analyser = null;
+  let remote = true, queue = Promise.resolve(), generation = 0, playing = null, levelRaf = 0, audioCtx = null, analyser = null;
   const preloaded = new Map();   // text -> Promise<Blob|null>
 
   function pickVoice() {
@@ -25,13 +25,20 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
   if ('speechSynthesis' in window) { pickVoice(); speechSynthesis.onvoiceschanged = pickVoice; }
 
   // ---------- browser voice (always available, synchronous) ----------
+  // Chrome on macOS can freeze speechSynthesis browser-wide (speaking stays true, nothing plays),
+  // so "is Jarvis talking" uses our own flag with a safety timeout, never speechSynthesis.speaking.
+  let browserTalking = false;
   function speakBrowser(text, onDone = () => {}) {
     if (!('speechSynthesis' in window) || !text) { onDone(); return; }
     const u = new SpeechSynthesisUtterance(text);
     if (voice) u.voice = voice;
     u.lang = voice?.lang || 'en-GB';
     u.rate = 1.02; u.pitch = 0.9;
-    u.onstart = trackLevel; u.onend = onDone; u.onerror = onDone;
+    browserTalking = true;
+    const safety = setTimeout(finish, 2000 + text.length * 80);
+    function finish() { clearTimeout(safety); browserTalking = false; onDone(); }
+    u.onstart = trackLevel; u.onend = finish; u.onerror = finish;
+    speakBrowser.last = u;                                   // keep a reference: Chrome GCs utterances
     speechSynthesis.speak(u);
   }
 
@@ -55,7 +62,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     for (const t of texts) {
       if (preloaded.has(t)) continue;
       const p = requestSpeech(t); preloaded.set(t, p);
-      p.then(blob => { if (blob) remote = true; });
+      p.then(blob => { remote = !!blob; });
     }
   }
 
@@ -78,7 +85,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
     });
   }
 
-  const isSpeaking = () => !!playing || !!window.speechSynthesis?.speaking;
+  const isSpeaking = () => !!playing || browserTalking;
 
   function trackLevel() {
     if (levelRaf || typeof requestAnimationFrame !== 'function') return;
@@ -107,7 +114,7 @@ export function createVoice({ onQuestion, onState = () => {}, onHeard = () => {}
   function speak(text, { interrupt = false } = {}) {
     if (!text) return;
     if (interrupt) silence();
-    if (!remote) { speakBrowser(text); return; }      // /speak not proven: same as before, no delay
+    if (!remote) { speakBrowser(text); return; }      // /speak failed at boot: browser voice, no delay
     const gen = generation;
     const audio = preloaded.get(text) ?? requestSpeech(text);   // fetch now, play in order
     queue = queue.then(async () => {
