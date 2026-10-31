@@ -36,7 +36,9 @@ export function createPhoneConversation({Recognition, speaker, ask, onState=()=>
       if(token!==generation||recognition!==rec)return;
       recognition=null;
       if(failed)return;
-      if(finalText.trim())void submit(finalText.trim());else onState('no-speech');
+      // iOS often ends before finalising (or the user taps Finish): use what we heard rather than 'no speech'.
+      const heard=(finalText.trim()||interim.trim());
+      if(heard)void submit(heard);else onState('no-speech');
     };
     try{rec.start();}catch(error){recognition=null;onError(error);onState('error');}
   }
