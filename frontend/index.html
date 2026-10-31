@@ -10,39 +10,39 @@
   <link rel="stylesheet" href="hud.css">
 </head>
 <body class="booting">
-  <!-- Laptop HUD on the projector, design A "Arc Reactor". Owner: Jogindar (A); redesign by Paul with Jogindar's OK. -->
+  <!-- Laptop HUD on the projector. Owner: Jogindar (A); redesign by Paul with Jogindar's OK. -->
   <main class="stage" aria-label="Suit camera heads-up display">
     <!-- full-screen live feed: a blurred copy fills the screen, the real frame sits on top uncropped -->
     <img id="liveBg" class="live-bg" alt="" hidden>
     <img id="live" class="live" alt="Latest frame from the suit camera" hidden>
-    <div class="scrim" aria-hidden="true"></div>
-    <div class="grain" aria-hidden="true"></div>
+    <div class="vignette" aria-hidden="true"></div>
 
     <div id="idle" class="idle">AWAITING VISUAL FEED<small>Open the capture page on the iPhone and press Start.</small></div>
 
-    <!-- frame chrome -->
-    <svg class="chrome" viewBox="0 0 1600 900" preserveAspectRatio="none" aria-hidden="true">
-      <path d="M40 120V40H140M1460 40H1560V120M40 780V860H140M1560 780V860H1460"/>
-    </svg>
     <header class="top">
-      <!-- small core: gold while listening, blinks while thinking, glows with Jarvis's voice -->
-      <div class="brand"><span class="core" aria-hidden="true"></span>J.A.R.V.I.S.</div>
+      <div class="brand">
+        <!-- core: gold while listening, blinks while thinking, glows with Jarvis's voice -->
+        <span class="core" aria-hidden="true"></span>
+        <span class="name">J.A.R.V.I.S.</span>
+        <span id="status" class="status">STANDBY</span>
+      </div>
       <div class="chips">
-        <span class="k">ROOM</span><span id="room" class="v">—</span>
-        <span class="k">FRAME</span><span id="frameChip" class="v">—</span>
-        <span id="age" class="v dim">—</span>
+        <span class="kv"><span class="k">ROOM</span><span id="room" class="v">—</span></span>
+        <span class="kv"><span class="k">FRAME</span><span id="frameChip" class="v">—</span></span>
+        <span id="age" class="dim">—</span>
         <span id="linkChip" class="chip">LINK ···</span>
         <span id="micChip" class="chip">MIC OFF</span>
       </div>
     </header>
 
-    <div id="status" class="status">STANDBY</div>
-
     <!-- what the suit sees right now -->
-    <ul id="objects" class="objects" aria-label="Objects and landmarks in view"></ul>
+    <section class="card objects-card" aria-label="Objects and landmarks in view">
+      <div class="label">IN VIEW</div>
+      <ul id="objects" class="objects"></ul>
+    </section>
 
     <!-- answer: evidence photo + way back -->
-    <aside id="evidence" class="evidence" hidden aria-label="Where Jarvis last saw it">
+    <aside id="evidence" class="card evidence" hidden aria-label="Where Jarvis last saw it">
       <div class="label">LAST SEEN</div>
       <figure class="frame"><img id="heroImg" alt="Where Jarvis last saw it"></figure>
       <div class="cap"><span id="heroNote"></span><span id="heroAge"></span></div>

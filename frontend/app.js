@@ -37,13 +37,11 @@ function showLatest(entry) {
   renderObjects(c);
 }
 
+// gold squares = movable objects (things you can lose), cyan outlines = landmarks
 function renderObjects(caption) {
-  const item = (kind, label, text) => {
-    const li = el('li', kind); li.append(el('span', 'k', label), el('span', 'v', text)); return li;
-  };
   $('objects').replaceChildren(
-    ...(caption.objects || []).slice(0, MAX_OBJECTS).map((o, i) => item('obj', `OBJ ${String(i + 1).padStart(2, '0')}`, o)),
-    ...(caption.landmarks || []).slice(0, MAX_LANDMARKS).map(l => item('mark', 'LANDMARK', l)),
+    ...(caption.objects || []).slice(0, MAX_OBJECTS).map(o => el('li', 'obj', o)),
+    ...(caption.landmarks || []).slice(0, MAX_LANDMARKS).map(l => el('li', 'mark', l)),
   );
 }
 
