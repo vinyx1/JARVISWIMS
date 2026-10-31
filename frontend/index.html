@@ -3,24 +3,73 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Ghost (name TBD)</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="color-scheme" content="dark">
+  <title>J.A.R.V.I.S.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="hud.css">
 </head>
 <body>
-  <!-- Owner: Person A. Skeleton only: camera loop, ask box, answer + breadcrumbs. -->
-  <h1>👻 (name TBD)</h1>
-  <video id="cam" autoplay playsinline muted></video>
-  <canvas id="grab" hidden></canvas>
-  <button id="start">Begin haunting</button>
-  <p id="status">idle</p>
+  <!-- Owner: Jogindar (A). Laptop HUD shown on the projector. See CLAUDE.md. -->
+  <header class="top">
+    <div class="brand"><span class="arc"></span>J.A.R.V.I.S.<span class="sub">MARK I · LOST &amp; FOUND PROTOCOL</span></div>
+    <div class="chips">
+      <span id="linkChip" class="chip">LINK ···</span>
+      <span id="frameChip" class="chip">FRAMES 0</span>
+      <span id="micChip" class="chip">MIC OFF</span>
+    </div>
+  </header>
 
-  <form id="askForm">
-    <input id="q" placeholder="where's my jacket?" autocomplete="off">
-    <button>Ask</button>
-  </form>
-  <p id="answer"></p>
-  <div id="frames"></div>
+  <main class="hud">
+    <section class="feed" aria-label="Live view from the suit camera">
+      <div class="viewport">
+        <img id="live" alt="Latest frame from the phone" hidden>
+        <div id="idle" class="idle">
+          <div class="reticle"></div>
+          <p>AWAITING VISUAL FEED</p>
+          <p class="hint">Open the capture page on the iPhone and press Start.</p>
+        </div>
+        <span class="bracket tl"></span><span class="bracket tr"></span>
+        <span class="bracket bl"></span><span class="bracket br"></span>
+        <div class="scanline"></div>
+        <div class="overlay-top">
+          <span id="room" class="tag room">ROOM —</span>
+          <span id="age" class="tag">—</span>
+        </div>
+        <div id="scanState" class="scan-state">SCANNING</div>
+        <div class="overlay-bottom">
+          <div id="scene" class="scene"></div>
+          <div id="objects" class="labels"></div>
+        </div>
+      </div>
+    </section>
 
-  <script src="app.js"></script>
+    <section class="jarvis" aria-label="Jarvis">
+      <div class="panel-title">COMMS</div>
+      <div id="transcript" class="transcript" aria-live="polite">
+        <p class="line sys">Say <b>"Jarvis, where did I leave my helmet?"</b><br>
+          Hold <kbd>Space</kbd> to talk without the wake word. <kbd>R</kbd> clears memory.</p>
+      </div>
+      <div id="heard" class="heard"></div>
+
+      <div id="evidence" class="evidence" hidden>
+        <div class="panel-title">LAST SEEN</div>
+        <figure class="hero">
+          <img id="heroImg" alt="Where Jarvis last saw it">
+          <figcaption id="heroCap"></figcaption>
+        </figure>
+        <div class="panel-title" id="trailTitle" hidden>ROUTE BACK</div>
+        <ol id="trail" class="trail"></ol>
+      </div>
+
+      <form id="askForm" class="ask">
+        <input id="q" placeholder="Type to Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
+        <button>SEND</button>
+      </form>
+    </section>
+  </main>
+
+  <div id="toast" class="toast" hidden></div>
+  <script type="module" src="app.js"></script>
 </body>
 </html>
