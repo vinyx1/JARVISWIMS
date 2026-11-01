@@ -21,6 +21,7 @@ load_dotenv(Path(__file__).resolve().parent.parent / ".env")
 import ai  # noqa: E402
 import answer  # noqa: E402
 import store  # noqa: E402
+import stt  # noqa: E402  (local Whisper: speech to text)
 import voice  # noqa: E402  (Paul's ElevenLabs wrapper)
 
 log = logging.getLogger("uvicorn.error")
@@ -158,6 +159,50 @@ async def ask(body: Ask):
             _ask_inflight -= 1
 
 
+# ---------- voice in: the browser records, Whisper (stt.py) listens ----------
+# "Jarvis" anywhere in the sentence, plus common mishearings, with an optional "hey"/"ok".
+WAKE = re.compile(r"\b(?:(?:hey|ok|okay|hi)[\s,]+)?(?:jarvis|jarvi[sz]|j[ae]r?v[aeiu]s|jervis|javis|travis|garvis|jarbis)\b[\s,.!?]*",
+                  re.I)
+
+
+def split_wake(text: str) -> tuple[bool, str]:
+    """(said "Jarvis"?, the question without the wake word). "Where are my keys, Jarvis?" -> (True, "Where are my keys")."""
+    m = WAKE.search(text)
+    if not m:
+        return False, text.strip()
+    rest = (text[:m.start()] + " " + text[m.end():]).strip(" ,.!?")
+    return True, re.sub(r"\s+", " ", rest)
+
+
+@app.post("/listen")
+async def listen(audio: UploadFile = File(...), mode: str = Form("ask")):
+    """One spoken utterance (16 kHz WAV from frontend/mic.js) -> what was heard, and Jarvis's answer.
+
+    mode "ask":  everything said is the question (push-to-talk, or right after "Jarvis" alone).
+    mode "wake": hands-free; act only if "Jarvis" was said. "Jarvis" alone -> armed: the next
+                 utterance (sent with mode "ask") is the question.
+    Reply: {"heard", "question", "armed", "result"}; result is the /ask reply, or null.
+    """
+    data = await audio.read()
+    try:
+        heard = await asyncio.to_thread(stt.transcribe, data)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    except Exception:
+        log.exception("transcription failed")
+        raise HTTPException(status_code=503, detail="Speech recognition is unavailable.")
+    woke, question = split_wake(heard)
+    reply = {"heard": heard, "question": None, "armed": False, "result": None}
+    if mode == "wake" and not woke:
+        return reply  # background chatter: ignore
+    if not re.search(r"[a-z]{2}", question, re.I):
+        reply["armed"] = woke  # "Jarvis" on its own: listen for the question next
+        return reply
+    reply["question"] = question
+    reply["result"] = await ask(Ask(question=question))
+    return reply
+
+
 @app.get("/interaction")
 def interaction():
     return _exchange
@@ -167,7 +212,22 @@ class Speak(BaseModel):
     text: str
 
 
-SAY_VOICE = os.getenv("JARVIS_SAY_VOICE", "Daniel")
+def _best_say_voice() -> str:
+    """The best installed British male voice: Daniel (Premium/Enhanced) if downloaded, else Daniel.
+    Download it free: System Settings → Accessibility → Spoken Content → System voice → Manage Voices."""
+    if os.getenv("JARVIS_SAY_VOICE"):
+        return os.environ["JARVIS_SAY_VOICE"]
+    try:
+        names = subprocess.run(["say", "-v", "?"], capture_output=True, text=True, timeout=5).stdout
+    except Exception:
+        return "Daniel"
+    for want in ("Daniel (Premium)", "Daniel (Enhanced)"):
+        if want in names:
+            return want
+    return "Daniel"
+
+
+SAY_VOICE = _best_say_voice() if shutil.which("say") else "Daniel"
 
 
 def _say_wav(text: str) -> bytes | None:
@@ -289,6 +349,11 @@ def reset():
         store.reset()
         _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
     return {"ok": True}
+
+
+@app.on_event("startup")
+def _load_ears():
+    stt.warm_up()
 
 
 app.mount("/frames", StaticFiles(directory=store.FRAMES), name="frames")

@@ -18,6 +18,17 @@ command -v uv >/dev/null || { c 36 "▶ Installing uv"; brew install uv || die "
 command -v cloudflared >/dev/null || { c 36 "▶ Installing cloudflared"; brew install cloudflared || die "brew install cloudflared failed"; }
 [[ -x backend/.venv/bin/python ]] || { c 36 "▶ Creating the Python environment"; uv venv -q backend/.venv || die "uv venv failed"; }
 uv pip install -q --python backend/.venv/bin/python -r backend/requirements.txt || die "Installing Python packages failed"
+# Jarvis's ears: the Whisper speech model (~480 MB, downloaded once, then cached).
+backend/.venv/bin/python - <<'PY' 2>/dev/null || c 33 "  (couldn't fetch the speech model now; voice input will retry when used)"
+import os, sys
+sys.path.insert(0, "backend")
+from huggingface_hub import try_to_load_from_cache
+import stt
+repo = f"Systran/faster-whisper-{stt.MODEL_NAME}"
+if not isinstance(try_to_load_from_cache(repo, "model.bin"), str):
+    print(f"\033[36m▶ Downloading Jarvis's ears (Whisper {stt.MODEL_NAME}, ~480 MB, first time only)\033[0m", flush=True)
+stt._load()
+PY
 if ! grep -q '^ANTHROPIC_API_KEY=sk' .env 2>/dev/null; then
   [[ -f .env ]] || cp .env.example .env
   printf 'Paste your Anthropic API key (sk-ant-…), then Enter: '; read -rs KEY; echo
@@ -127,6 +138,7 @@ c 2 "  (the same QR is on the HUD; press Q there to show it big)"
 (( ok )) || c 33 "  (tunnel not answering yet; wait ~30s, then refresh on the phone)"
 printf '%s' "$URL/capture.html" | pbcopy 2>/dev/null && echo "  (copied to clipboard: AirDrop or text it to the phone)"
 echo
+c 2 "  Talk: hold Space on the HUD (M = hands-free), or hold the button on the phone"
 c 2 "  Checklist: iPhone Auto-Lock → Never · ⌃⌘F full screen · Q phone QR · V laptop voice · R clears memory"
 c 2 "  Mac stays awake until Ctrl-C. Logs: data/backend.log, data/tunnel.log"
 echo

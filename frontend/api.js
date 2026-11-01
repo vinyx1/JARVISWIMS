@@ -21,6 +21,8 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
   const json=(path,body,check)=>request(path,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)},check);
   return {
     uploadFrame(blob,ts) {const body=new FormData();body.append('image',blob,'frame.jpg');body.append('ts',String(ts));return request('/frame',{method:'POST',body},x=>typeof x?.id==='string'&&(x.caption===null||typeof x.caption?.scene==='string'));},
+    // One spoken utterance (16 kHz WAV from mic.js) -> {heard, question, armed, result}. See POST /listen.
+    listen(wav,mode='ask') {const body=new FormData();body.append('audio',new Blob([wav],{type:'audio/wav'}),'utterance.wav');body.append('mode',mode);return request('/listen',{method:'POST',body},x=>typeof x?.heard==='string'&&typeof x.armed==='boolean'&&(x.result===null||typeof x.result?.answer==='string'));},
     askQuestion(question) {return json('/ask',{question},x=>typeof x?.answer==='string'&&['find','retrace','remember','other'].includes(x.kind)&&Array.isArray(x.frames));},
     getInteraction:()=>request('/interaction',{cache:'no-store'},x=>x===null||(typeof x.id==='string'&&typeof x.question==='string'&&typeof x.result?.answer==='string'&&Array.isArray(x.result.frames))),
     getMine:()=>request('/mine',{},x=>Array.isArray(x)&&x.every(item=>typeof item.item==='string'&&typeof item.description==='string'&&typeof item.frame_id==='string'&&typeof item.url==='string'&&Number.isFinite(item.ts))),

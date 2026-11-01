@@ -1002,3 +1002,9 @@ progress {
 .phone-voice-options { display: grid; gap: 6px; margin: 10px 0; }
 .phone-toggle { display: flex; align-items: center; gap: 8px; font-size: 13px; }
 .phone-toggle input { width: 18px; height: 18px; accent-color: #f2b544; }
+
+/* voice: hold-to-talk and the mic level */
+.talk-button { width:100%; min-height:64px; font-size:16px; touch-action:none; user-select:none; -webkit-user-select:none; -webkit-touch-callout:none; }
+.talk-button.held { background:#f2b544; border-color:#f2b544; color:#111; }
+.mic-meter { height:6px; border-radius:3px; background:#ffffff1a; overflow:hidden; margin:8px 0 10px; }
+.mic-meter span { display:block; height:100%; width:0; background:#5fe3ff; transition:width .08s; }

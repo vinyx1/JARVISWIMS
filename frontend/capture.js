@@ -43,48 +43,75 @@ const preview=createPreviewSender({
  canSend:()=>loop.running&&!document.hidden
 });
 
-// Phone owns voice; the laptop polls completed exchanges without recording or speaking.
-import {createPhoneConversation,createDeviceSpeaker} from './phone-voice.js';
-import {createWakeListener} from './wake.js';
-const questionApi=createApi({timeoutMs:25000});
-let lastReply='',playbackBlocked=false;
-const speaker=createDeviceSpeaker({onBlocked(){playbackBlocked=true;$('phoneVoiceStatus').textContent='Tap Play reply to allow audio, or read the answer below.';}});
-const voiceStates={ready:'Ready. Tap Talk for your next question.',listening:'Listening… speak, then pause. Tap again to finish.',thinking:'Checking the footage…',speaking:'Jarvis is replying on this device.',denied:'Microphone blocked. Allow access in browser settings, or type below.',unsupported:'Speech recognition is unavailable here. Type your question below.', 'no-speech':'No speech captured. Tap Talk to try again.', 'recognition-error':'Speech recognition failed. Try again or type below.',error:'Could not complete the question. Try again.',off:'Microphone and reply audio are off.'};
+// ---------- voice: hold to talk, or hands-free "Jarvis, …" ----------
+// Audio is recorded here (mic.js) and transcribed on the laptop by Whisper (POST /listen).
+import {createMic} from './mic.js';
+import {createConversation} from './listen.js';
+import {createDeviceSpeaker} from './speaker.js';
+const voiceApi=createApi({timeoutMs:30000});
+let lastReply='';
+const say=text=>{$('phoneVoiceStatus').textContent=text;};
+const speaker=createDeviceSpeaker({onBlocked(){say('Tap "Play reply" to hear Jarvis, or read the answer below.');}});
 const OUTPUT_KEY='jarvisOutput';
 try{const saved=localStorage.getItem(OUTPUT_KEY);if(saved)$('phoneOutput').value=saved;}catch{}
 $('phoneOutput').onchange=()=>{try{localStorage.setItem(OUTPUT_KEY,$('phoneOutput').value);}catch{}};
 const onLaptop=()=>$('phoneOutput').value==='laptop';
-const replySpeaker={unlock:()=>speaker.unlock(),stop:()=>speaker.stop(),play:text=>onLaptop()?Promise.resolve():speaker.play(text)};
-const phoneVoice=createPhoneConversation({
- Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- speaker:replySpeaker,ask:question=>questionApi.askQuestion(question),
- onState(state){
-   if(!(state==='ready'&&playbackBlocked))$('phoneVoiceStatus').textContent=voiceStates[state]||state;
-   if(state==='speaking'&&onLaptop())$('phoneVoiceStatus').textContent='Jarvis is replying on the laptop.';
-   if(['ready','no-speech','recognition-error','error'].includes(state))resumeHandsFree();
-   $('phoneTalk').textContent=state==='listening'?'Finish speaking':'Talk to Jarvis';
-   const busy=state==='thinking'||state==='speaking';$('phoneTalk').disabled=busy;$('phoneAskForm').querySelector('button').disabled=busy;$('phoneReplay').disabled=busy;
- },
- onHeard(text){$('phoneHeard').textContent=`You: ${text}`;},
- onAnswer(result){lastReply=result.answer;playbackBlocked=false;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
- onError(error){$('phoneAnswer').textContent=error.message;}
+const handsFree=()=>$('phoneHandsFree').checked;
+const idle=()=>handsFree()?'Hands-free: say "Jarvis, …" (or hold the button).':'Hold the button and speak, or turn on hands-free.';
+const states={
+  listening:idle, recording:()=>'Listening… let go when you\'re done.', thinking:()=>'Checking the footage…',
+  armed:()=>'Yes, sir? Go ahead.', speaking:()=>onLaptop()?'Jarvis is replying on the laptop.':'Jarvis is replying.',
+  'not-heard':()=>'I didn\'t catch that. Hold the button and try again.', denied:()=>'Microphone blocked. Allow it in Settings → Safari → Microphone, then reload.',
+  error:()=>'Something went wrong. Try again.', off:idle,
+};
+const mic=createMic({
+  onUtterance:(wav,info)=>void convo.handle(wav,info),
+  onLevel:level=>{$('phoneLevel').style.width=`${Math.round(level*100)}%`;},
+  onState:s=>{if(states[s])say(states[s]());},
 });
-$('phoneTalk').onclick=()=>{playbackBlocked=false;wake.stop();phoneVoice.listen();};
-// Hands-free: keep listening for "Jarvis …". Paused while Jarvis answers (an open iPhone mic can
-// route the reply to the quiet earpiece), resumed afterwards.
-const wake=createWakeListener({
- Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- isBusy:()=>phoneVoice.busy,
- onQuestion(question){wake.stop();playbackBlocked=false;$('phoneHandsFree').checked=true;void phoneVoice.submit(question);},
- onState(state){if(state==='hands-free')$('phoneVoiceStatus').textContent='Hands-free: say "Hey Jarvis, …"';
-  if(state==='armed')$('phoneVoiceStatus').textContent='Yes, sir? Go ahead.';
-  if(state==='denied'){$('phoneHandsFree').checked=false;$('phoneVoiceStatus').textContent=voiceStates.denied;}}
+const convo=createConversation({
+  listen:(wav,mode)=>voiceApi.listen(wav,mode), mic,
+  speak:text=>onLaptop()?Promise.resolve():speaker.play(text),   // the laptop HUD speaks it itself
+  onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
+  onHeard:text=>{$('phoneHeard').textContent=`You: ${text}`;},
+  onAnswer:result=>{lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
+  onError:error=>{$('phoneAnswer').textContent=error.message;},
 });
-function resumeHandsFree(){if($('phoneHandsFree').checked&&!wake.on&&!document.hidden)wake.start();}
-$('phoneHandsFree').onchange=()=>{speaker.unlock();if($('phoneHandsFree').checked)wake.start();else wake.stop();};
-$('phoneVoiceOff').onclick=()=>{phoneVoice.cancel();wake.stop();$('phoneHandsFree').checked=false;};
-$('phoneReplay').onclick=()=>{speaker.unlock();playbackBlocked=false;void speaker.play(lastReply);};
-$('phoneAskForm').onsubmit=e=>{e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question||phoneVoice.busy)return;$('phoneQuestion').value='';playbackBlocked=false;void phoneVoice.submit(question);};
-if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){$('phoneTalk').disabled=true;$('phoneVoiceStatus').textContent=voiceStates.unsupported;}
-document.addEventListener('visibilitychange',()=>{if(document.hidden){phoneVoice.cancel();wake.stop();}});
-window.addEventListener('pagehide',()=>{phoneVoice.cancel();wake.stop();});
+
+// Hold to talk: press = record, release = send. Works with hands-free on or off.
+async function talkDown(e){
+  e.preventDefault();
+  if(convo.busy){speaker.stop();return;}   // tapping while Jarvis talks cuts him off
+  speaker.unlock(); speaker.stop();
+  $('phoneTalk').classList.add('held');
+  mic.hold(true);
+  if(!mic.on){try{await mic.start();}catch{$('phoneTalk').classList.remove('held');mic.hold(false);return;}}
+  else await mic.resume();
+}
+function talkUp(e){
+  e?.preventDefault(); if(!$('phoneTalk').classList.contains('held'))return;
+  $('phoneTalk').classList.remove('held'); mic.hold(false);
+  if(!handsFree())mic.stop();   // push-to-talk only: give the mic back
+}
+$('phoneTalk').addEventListener('pointerdown',talkDown);
+for(const ev of ['pointerup','pointercancel','pointerleave'])$('phoneTalk').addEventListener(ev,talkUp);
+$('phoneTalk').addEventListener('contextmenu',e=>e.preventDefault());
+
+$('phoneHandsFree').onchange=async()=>{
+  speaker.unlock();
+  if(handsFree()){mic.auto=true;try{await mic.start();}catch{$('phoneHandsFree').checked=false;mic.auto=false;}}
+  else{mic.auto=false;convo.cancel();mic.stop();}
+};
+$('phoneReplay').onclick=()=>{speaker.unlock();void speaker.play(lastReply);};
+$('phoneAskForm').onsubmit=async e=>{
+  e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
+  $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
+  try{const result=await voiceApi.askQuestion(question);lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;
+    say(states.speaking());if(!onLaptop()){mic.pause();await speaker.play(result.answer);await mic.resume();}}
+  catch(error){$('phoneAnswer').textContent=error.message;}
+  say(idle());
+};
+if(!navigator.mediaDevices?.getUserMedia){$('phoneTalk').disabled=true;$('phoneHandsFree').disabled=true;say('The microphone needs HTTPS. Open the link from the laptop\'s QR code.');}
+function hush(){convo.cancel();speaker.stop();mic.stop();$('phoneHandsFree').checked=false;mic.auto=false;}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hush();});
+window.addEventListener('pagehide',hush);

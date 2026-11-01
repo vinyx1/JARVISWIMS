@@ -31,13 +31,11 @@
       </div>
       <section class="phone-voice-controls" aria-label="Jarvis voice">
         <h2>Talk to Jarvis</h2>
-        <p id="phoneVoiceStatus" role="status">Use this device's microphone and speaker.</p>
-        <div class="phone-talk-actions">
-          <button id="phoneTalk" class="button primary" type="button">Talk to Jarvis</button>
-          <button id="phoneVoiceOff" class="button secondary" type="button">Mute / cancel</button>
-        </div>
+        <p id="phoneVoiceStatus" role="status">Hold the button and speak, or turn on hands-free.</p>
+        <div class="mic-meter" aria-hidden="true"><span id="phoneLevel"></span></div>
+        <button id="phoneTalk" class="button primary talk-button" type="button">🎙 Hold to talk</button>
         <div class="phone-voice-options">
-          <label class="phone-toggle"><input id="phoneHandsFree" type="checkbox"> Hands-free: just say "Hey Jarvis, …"</label>
+          <label class="phone-toggle"><input id="phoneHandsFree" type="checkbox"> Hands-free: just say "Jarvis, …"</label>
           <label class="field-label" for="phoneOutput">JARVIS SPEAKS ON</label>
           <select id="phoneOutput"><option value="phone">This phone</option><option value="laptop">The laptop (Mac speakers)</option></select>
         </div>
@@ -52,7 +50,7 @@
       </section>
       <details class="phone-info">
         <summary>Capture &amp; privacy</summary>
-        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. Voice uses this device’s microphone only after you tap Talk. Browser speech recognition may send audio to its speech service. Mute / cancel stops voice. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
+        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. The microphone is used only while you hold Talk or hands-free is on. What you say is transcribed on the laptop (Whisper, offline); only the text goes to the AI. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
       </details>
       </div>
     </details>

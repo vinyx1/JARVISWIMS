@@ -21,7 +21,15 @@ Or double-click **`Start Jarvis.command`** in Finder. The first run installs wha
    to show it big at any time.
 
 `./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
-HUD keys: **Q** phone QR · **V** Jarvis speaks on the laptop · **R** clear memory.
+**Talking to Jarvis:** on the HUD, **hold Space** and speak (or press **M** for hands-free:
+just say "Jarvis, …"). On the phone, hold **🎙 Hold to talk**, or tick hands-free. Speech is
+transcribed on the laptop by Whisper (offline, free); the first run downloads its model (~480 MB).
+
+HUD keys: **Space** talk · **M** hands-free · **Q** phone QR · **V** Jarvis speaks on the laptop · **R** clear memory.
+
+**Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →
+Manage Voices → English (UK) → download **Daniel (Enhanced)**. Restart `./start`; Jarvis uses it
+automatically.
 
 ## Manual setup (development)
 

@@ -3,6 +3,9 @@
 // from either, arrives through GET /interaction and is shown in the chat.
 import { createApi } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
+import { createMic } from './mic.js';
+import { createConversation } from './listen.js';
+import { createDeviceSpeaker } from './speaker.js';
 
 const $ = id => document.getElementById(id);
 const api = createApi({ timeoutMs: 15000 });
@@ -161,23 +164,47 @@ function showEvidence(result) {
   if (result.kind === 'remember') void refreshMine();
 }
 
-// ---------- phone exchanges: display only, never open the HUD microphone ----------
-let interactionId=null, firstExchange=true;
-// Optional: the laptop speaks the reply (Mac speakers / projector) instead of the phone. Key V.
-// The phone then picks "Jarvis speaks on: The laptop" so the reply isn't heard twice.
-let laptopVoice=false, laptopAudio=null;
+// ---------- Jarvis's voice on the laptop ----------
+// V: also speak answers to phone questions here (Mac speakers / projector). The phone then picks
+// "Jarvis speaks on: The laptop" so the reply isn't heard twice. Typed and laptop-mic questions
+// are always answered out loud here.
+let interactionId=null, firstExchange=true, laptopVoice=false;
 try{laptopVoice=localStorage.getItem('jarvisLaptopVoice')==='1';}catch{}
 function showVoiceChip(){$('micChip').textContent=laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE';$('micChip').classList.toggle('ok',laptopVoice);}
+const speaker=createDeviceSpeaker();
 async function speakOnLaptop(text){
-  laptopAudio?.pause();window.speechSynthesis?.cancel();
-  try{
-    const r=await fetch('/speak',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({text})});
-    if(r.ok&&r.headers.get('content-type')?.startsWith('audio/')){
-      const url=URL.createObjectURL(await r.blob());laptopAudio=new Audio(url);laptopAudio.onended=()=>URL.revokeObjectURL(url);
-      await laptopAudio.play();return;
-    }
-  }catch{/* fall back to the browser voice */}
-  if(window.speechSynthesis&&window.SpeechSynthesisUtterance){const u=new SpeechSynthesisUtterance(text);u.lang='en-GB';window.speechSynthesis.speak(u);}
+  mic.pause();   // don't let the laptop mic hear Jarvis
+  try{await speaker.play(text);}finally{await mic.resume();}
+}
+
+// ---------- laptop microphone: hold Space to talk, M for hands-free "Jarvis, …" ----------
+const spokenHere=new Set();   // questions this page already answered out loud
+const earText={off:'MIC · HOLD SPACE',listening:()=>mic.auto?'MIC · SAY "JARVIS…"':'MIC · HOLD SPACE',recording:'● RECORDING',
+  thinking:'MIC · THINKING',armed:'MIC · YES, SIR?',speaking:'MIC · SPEAKING','not-heard':'MIC · DIDN\'T CATCH THAT',denied:'MIC BLOCKED',error:'MIC ERROR'};
+function showEar(state){const t=earText[state];if(!t)return;$('earChip').textContent=typeof t==='function'?t():t;
+  $('earChip').classList.toggle('hot',state==='recording'||state==='armed');$('earChip').classList.toggle('bad',state==='denied'||state==='error');}
+const mic=createMic({onUtterance:(wav,info)=>void convo.handle(wav,info),onState:showEar});
+const convo=createConversation({
+  listen:(wav,mode)=>api.listen(wav,mode), mic, speak:speakOnLaptop,
+  onState:showEar,
+  onHeard:text=>{$('heard').textContent=`Heard: “${text}”`;},
+  onAnswer:(result,question)=>spokenHere.add(question),   // shown in the chat via /interaction
+  onError:error=>toast(error.status===503?'SPEECH RECOGNITION UNAVAILABLE':'VOICE FAILED'),
+});
+async function talk(down){
+  if(down){
+    speaker.unlock();
+    if(convo.busy){speaker.stop();return;}   // Space while Jarvis talks cuts him off
+    mic.hold(true);
+    if(!mic.on){try{await mic.start();}catch{mic.hold(false);toast('ALLOW THE MICROPHONE IN CHROME');}}
+    else await mic.resume();
+  }else{mic.hold(false);if(!mic.auto)mic.stop();}
+}
+async function toggleHandsFree(){
+  speaker.unlock();
+  if(mic.auto){mic.auto=false;convo.cancel();mic.stop();toast('HANDS-FREE OFF');return;}
+  mic.auto=true;
+  try{await mic.start();toast('HANDS-FREE · SAY "JARVIS, …"');}catch{mic.auto=false;toast('ALLOW THE MICROPHONE IN CHROME');}
 }
 const interactions=createLatestPoller({
   load:()=>api.getInteraction(),
@@ -186,24 +213,26 @@ const interactions=createLatestPoller({
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
     const typedHere=typed.has(exchange.question);typed.delete(exchange.question);
+    const alreadySpoken=spokenHere.has(exchange.question);spokenHere.delete(exchange.question);
     // never replay an old answer on page load; typed questions are always answered out loud here
-    if((laptopVoice||typedHere)&&!firstExchange)void speakOnLaptop(exchange.result.answer);
+    if((laptopVoice||typedHere)&&!alreadySpoken&&!firstExchange)void speakOnLaptop(exchange.result.answer);
     firstExchange=false;
     document.querySelectorAll('.line.pending').forEach(line=>line.remove());
     say('you',exchange.question);say('jarvis',exchange.result.answer);
     showEvidence(exchange.result);
-    // the photo just shrank the chat: keep the newest reply in view
-    requestAnimationFrame(()=>{$('transcript').scrollTop=$('transcript').scrollHeight;});
   },
   onError(){ /* Camera status remains independent; a later poll can recover. */ }
 });
+// Keep the newest line in view: the evidence photo loads after the reply and shrinks the chat.
+new ResizeObserver(()=>{$('transcript').scrollTop=$('transcript').scrollHeight;}).observe($('transcript'));
+
 // ---------- chat box: typed questions from the laptop ----------
 const typed=new Set();
 $('askForm').onsubmit=async e=>{
   e.preventDefault();
   const question=$('q').value.trim();
   if(!question||resetting)return;
-  $('q').value='';typed.add(question);
+  $('q').value='';typed.add(question);speaker.unlock();
   const pending=say('jarvis','Checking the footage, sir…');pending.classList.add('pending');
   try{await api.askQuestion(question);}   // the answer itself arrives via /interaction
   catch(error){typed.delete(question);pending.classList.remove('pending');pending.textContent=`JARVIS ${error.message}`;}
@@ -226,9 +255,14 @@ void refreshPhoneLink(); setInterval(refreshPhoneLink,3000);
 setTimeout(()=>{firstExchange=false;},2500);
 showVoiceChip();
 document.body.classList.remove('booting');
+const typingInField=e=>e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable;
+document.addEventListener('keyup',e=>{if(e.code==='Space'&&!typingInField(e)){e.preventDefault();void talk(false);}});
+window.addEventListener('blur',()=>{mic.hold(false);});   // Space released outside the window
 document.addEventListener('keydown',async e=>{
-  if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable||resetting)return;
+  if(typingInField(e)||resetting)return;
   const plain=!e.repeat&&!e.metaKey&&!e.ctrlKey&&!e.altKey;
+  if(e.code==='Space'){e.preventDefault();if(plain)await talk(true);return;}
+  if((e.key==='m'||e.key==='M')&&plain)await toggleHandsFree();
   if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopVoice',laptopVoice?'1':'0');}catch{}showVoiceChip();toast(laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE');}
   if((e.key==='q'||e.key==='Q')&&plain){$('qrOverlay').hidden=!$('qrOverlay').hidden;void refreshPhoneLink();}
   if((e.key==='r'||e.key==='R')&&plain)await reset();
@@ -237,7 +271,7 @@ document.addEventListener('keydown',async e=>{
 
 async function reset() {
   if (resetting) return;
-  resetting = true; mineGeneration++; hideEvidence(); $('q').disabled = true;
+  resetting = true; mineGeneration++; hideEvidence(); $('q').disabled = true; convo.cancel(); speaker.stop();
   document.body.classList.remove('thinking'); poller.stop(); stopPreview(); interactions.stop();
   $('evidence').hidden = true;
   document.querySelectorAll('.line.pending').forEach(line => { line.classList.remove('pending'); line.textContent = 'JARVIS Question cancelled by memory reset.'; });
@@ -254,7 +288,7 @@ async function reset() {
   }
 }
 
-window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); interactions.stop(); mineGeneration++; });
+window.addEventListener('pagehide', () => { poller.stop(); stopPreview(); interactions.stop(); mineGeneration++; convo.cancel(); mic.stop(); speaker.stop(); });
 window.addEventListener('pageshow', event => { if (event.persisted) { poller.start(); startPreview(); interactions.start(); void refreshMine(); } });
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }

@@ -67,13 +67,33 @@ State is held in memory for one active demo, replaced on each completed `/ask`, 
 cleared on reset or server restart. Reset returns `409` while a question is in flight, so an old registration cannot complete across that reset.
 This is a latest-exchange relay, not a queue for multiple simultaneous users.
 
+## POST /listen
+
+Voice input. The browser records one utterance (`frontend/mic.js`) and sends it as
+`multipart/form-data`: `audio` (16 kHz mono 16-bit WAV) and `mode`:
+
+- `ask`: everything said is the question (push-to-talk, or right after "Jarvis" on its own).
+- `wake`: hands-free; act only if "Jarvis" was said ("Hey Jarvis, where's my helmet?",
+  "Where are my keys, Jarvis?"). Anything else is ignored.
+
+The backend transcribes it locally with Whisper (`backend/stt.py`, no API key) and, if there
+is a question, answers it exactly like `/ask` (so it also shows on the HUD via `/interaction`).
+```json
+{ "heard": "Hey Jarvis, where's my helmet?", "question": "where's my helmet",
+  "armed": false, "result": { "answer": "…", "kind": "find", "frames": [] } }
+```
+`armed: true` means "Jarvis" was said with nothing after it: send the next utterance with
+`mode=ask`. `result` is `null` when there was nothing to answer. `400` for a bad WAV, `503`
+if speech recognition is unavailable.
+
 ## POST /speak
 
 ```json
 { "text": "Very good, sir." }
 ```
-Returns `200 audio/mpeg` in Jarvis's ElevenLabs voice, or `204` when it can't (no
-`ELEVENLABS_API_KEY`, slow, or failed). On `204` the HUD speaks with the browser's British voice.
+Returns `200 audio/mpeg` in Jarvis's ElevenLabs voice if `ELEVENLABS_API_KEY` is set, else
+`200 audio/wav` from the Mac's `say` (the best installed Daniel voice), or `204` if both fail;
+then the page speaks with the browser's British voice.
 
 ## GET /mine
 

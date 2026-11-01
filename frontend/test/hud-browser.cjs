@@ -69,8 +69,6 @@ let browser;
  check(await page.locator('#trail li').count()===2,'retrace should preserve breadcrumb sequence');
  check(new URL(await page.locator('#heroImg').getAttribute('src'),'http://localhost').pathname==='/frames/f_000001.jpg','retrace target is the last returned frame');
  askMode='empty';await ask('Find the missing wrench');await page.waitForTimeout(600);check(!await page.locator('#evidence').isVisible(),'empty results must hide evidence');
- await page.locator('body').click({position:{x:100,y:100}});await page.keyboard.press('Space');
- check(await page.evaluate(()=>window.testSpeech.recognizers.length===0&&window.testSpeech.spoken.length===0),'display HUD must never start recognition or speech, even after clicks and Space');
  previewMode='live';await page.locator('#liveChip').waitFor({state:'visible'});check((await page.locator('#live').getAttribute('src')).startsWith('blob:'),'live preview must use received frame');
  previewMode='empty';await page.locator('#liveChip').waitFor({state:'hidden'});await page.waitForFunction(()=>document.getElementById('live').getAttribute('src')?.startsWith('/frames/'));
  offline=true;await page.getByText('LINK LOST',{exact:true}).waitFor();offline=false;await page.getByText('LINK OK',{exact:true}).waitFor();
