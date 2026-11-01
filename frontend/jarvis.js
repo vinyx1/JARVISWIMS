@@ -173,7 +173,6 @@ async function checkExchange() {
     exchangeId = ex.id;
     if (first) return;   // never replay an answer from before this page loaded
     const already = ex.source === clientId;   // the laptop's own mic question: its conversation speaks it
-    guideSaw(ex);
     answer(ex, {speak: !already});
   } catch { /* next poll */ }
 }
@@ -191,7 +190,7 @@ function clock() {
 setInterval(clock, 1000); clock();
 function greetingFor(d = new Date()) { const h = d.getHours(); return h < 5 ? 'Up late again, sir.' : h < 12 ? 'Good morning, sir.' : h < 18 ? 'Good afternoon, sir.' : 'Good evening, sir.'; }
 $('greeting').textContent = greetingFor();
-let opticsLive = false, phoneUrl = null, stats = {live: false, frames: 0, items: 0};
+let opticsLive = false, phoneUrl = null;
 async function readouts() {
   try {
     const [latest, health] = await Promise.all([api.getLatest(), (await fetch('/health', {cache: 'no-store'})).json()]);
@@ -199,7 +198,6 @@ async function readouts() {
     $('roOptics').textContent = opticsLive ? 'live' : 'offline'; $('roOptics').className = `v ${opticsLive ? 'on' : ''}`;
     $('roMem').textContent = String(health.frames).padStart(3, '0');
     $('roItems').textContent = String(health.items ?? 0);
-    stats = {live: opticsLive, frames: health.frames, items: health.items ?? 0}; guideCheck();
     if (!health.ai_ok) { $('roOptics').textContent = 'ai fault'; $('roOptics').className = 'v warn'; }
   } catch { $('roOptics').textContent = 'no link'; $('roOptics').className = 'v warn'; }
   try {
@@ -224,75 +222,38 @@ showAudio();
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1700); }
 
-// ---------- the walkthrough (H): each step ticks itself off when it really happens ----------
+// ---------- the walkthrough (H): a plain step-by-step guide ----------
 const GUIDE = [
-  {title: 'Scan the QR code', qr: true, waiting: 'Waiting for the phone',
-   body: 'Open the iPhone camera, scan this code and tap Begin. The phone becomes the suit camera; it asks for the camera and microphone once.',
-   done: () => stats.live, doneText: 'Phone connected'},
-  {title: 'Look around', waiting: 'Photos arriving',
-   body: 'Hold the phone up and point it at things as you move. Jarvis takes a photo every few seconds and remembers what was in each one.',
-   done: () => stats.frames - guideBase.frames >= 4, doneText: 'He’s watching'},
-  {title: 'Show him your things', say: '“Jarvis, these are my AirPods, remember them.”', waiting: 'Listening for “remember”',
-   body: 'Point the camera at something of yours and tell him. He studies that exact one — its colour, marks and scratches — so he can pick it out from look-alikes later.',
-   done: () => stats.items > 0, doneText: 'Registered'},
-  {title: 'Tell him where you put it', say: '“Jarvis, I’m leaving my AirPods here.”', waiting: 'Listening',
-   body: 'When you put it down, point the camera at the spot and say so. He saves exactly where it is.',
-   done: () => guideFlags.placed, doneText: 'Spot saved'},
-  {title: 'Go about your day', waiting: 'Watching',
-   body: 'Carry on as normal. Every photo is checked for your things, so if one moves he notices — and he never forgets where he last saw it.',
-   done: () => guideFlags.placedFrames !== null && stats.frames - guideFlags.placedFrames >= 3, doneText: 'Keeping track'},
-  {title: 'Ask him where it is', say: '“Jarvis, where are my AirPods?”', waiting: 'Waiting for your question',
-   body: 'Whenever you need it, just ask. He answers out loud, and this screen shows exactly where: the photo, the spot and how long ago.',
-   done: () => guideFlags.asked, doneText: 'Found it'},
+  {title: 'Scan the QR code', qr: true,
+   body: 'Open the iPhone camera, scan this code and tap Begin. The phone becomes the suit camera; it asks for the camera and microphone once.'},
+  {title: 'Look around',
+   body: 'Hold the phone up and point it at things as you move. Jarvis takes a photo every few seconds and remembers what was in each one.'},
+  {title: 'Show him your things', say: '“Jarvis, these are my AirPods, remember them.”',
+   body: 'Point the camera at something of yours and tell him. He studies that exact one — its colour, marks and scratches — so he can pick it out from look-alikes later.'},
+  {title: 'Tell him where you put it', say: '“Jarvis, I’m leaving my AirPods here.”',
+   body: 'When you put it down, point the camera at the spot and say so. He saves exactly where it is.'},
+  {title: 'Go about your day',
+   body: 'Carry on as normal. Every photo is checked for your things, so if one moves he notices — and he never forgets where he last saw it.'},
+  {title: 'Ask him where it is', say: '“Jarvis, where are my AirPods?”',
+   body: 'Whenever you need it, just ask. He answers out loud, and this screen shows exactly where: the photo, the spot and how long ago.'},
 ];
-let guideOpen = false, guideIdx = 0, guideAdvance = null;
-let guideBase = {frames: 0}, guideFlags = {placed: false, placedFrames: null, asked: false};
-// once a step has happened it stays ticked (the camera going quiet later doesn't undo step 1)
-const guideTicked = new Set();
-const guideDone = i => { if (guideTicked.has(i)) return true; try { if (GUIDE[i].done()) { guideTicked.add(i); return true; } } catch {} return false; };
+let guideOpen = false, guideIdx = 0;
 function renderGuide() {
-  const step = GUIDE[guideIdx], done = guideDone(guideIdx);
+  const step = GUIDE[guideIdx];
   $('guideCount').textContent = `${guideIdx + 1} / ${GUIDE.length}`;
   $('guideRail').replaceChildren(...GUIDE.map((g, i) => {
-    const li = el('li', `${guideDone(i) ? 'done' : ''} ${i === guideIdx ? 'current' : ''}`.trim());
+    const li = el('li', i < guideIdx ? 'done' : i === guideIdx ? 'current' : null);
     li.title = g.title; li.onclick = () => { guideIdx = i; renderGuide(); }; return li;
   }));
   $('guideTitle').textContent = step.title;
   $('guideBody').textContent = step.body;
   $('guideSay').hidden = !step.say; $('guideSay').textContent = step.say || '';
   $('guideQr').hidden = !step.qr || !phoneUrl;
-  const count = guideIdx === 1 && !done ? ` · ${Math.max(0, stats.frames - guideBase.frames)}` : '';
-  $('guideStatus').textContent = done ? step.doneText : `${step.waiting}${count}`;
-  $('guideStatus').className = `guide-status ${done ? 'done' : 'waiting'}`;
   $('guidePrev').disabled = guideIdx === 0;
   $('guideNext').textContent = guideIdx === GUIDE.length - 1 ? 'Finish' : 'Next ›';
 }
-function guideCheck() {
-  if (!guideOpen) return;
-  if (guideFlags.placed && guideFlags.placedFrames === null) guideFlags.placedFrames = stats.frames;
-  if (!$('guide').hidden) renderGuide();
-  // the current step just happened: move on to the next one that hasn't, after a beat
-  if (guideDone(guideIdx) && !guideAdvance && guideIdx < GUIDE.length - 1) {
-    const from = guideIdx;
-    guideAdvance = setTimeout(() => {
-      guideAdvance = null;
-      if (guideOpen && guideIdx === from) { const next = GUIDE.findIndex((_, i) => i > from && !guideDone(i)); guideIdx = next === -1 ? GUIDE.length - 1 : next; if (!$('guide').hidden) renderGuide(); }
-    }, 1600);
-  }
-}
-function guideSaw(ex) {
-  const q = ex.question || '', kind = ex.result?.kind;
-  if (kind === 'remember' && /\b(here|there|left|put|leaving|placed)\b/i.test(q) && /^Very good/i.test(ex.result.answer || '')) guideFlags.placed = true;
-  if (kind === 'find' || kind === 'retrace') guideFlags.asked = true;
-  guideCheck();
-}
-function openGuide() {
-  guideOpen = true; guideBase = {frames: stats.frames};
-  guideIdx = Math.max(0, GUIDE.findIndex((_, i) => !guideDone(i)));
-  if (mode === 'idle') showIdle(); else renderGuide();
-  void readouts();
-}
-function closeGuide() { guideOpen = false; clearTimeout(guideAdvance); guideAdvance = null; if (mode === 'idle') showIdle(); }
+function openGuide() { guideOpen = true; guideIdx = 0; if (mode === 'idle') showIdle(); else renderGuide(); }
+function closeGuide() { guideOpen = false; if (mode === 'idle') showIdle(); }
 $('guideOpen').onclick = openGuide;
 $('guideClose').onclick = closeGuide;
 $('guidePrev').onclick = () => { guideIdx = Math.max(0, guideIdx - 1); renderGuide(); };

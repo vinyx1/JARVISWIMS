@@ -46,8 +46,8 @@ view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS
 The previous HUD is also saved as the git tag `ui-classic`.
 
 **Walkthrough:** press **H** (or **How it works** on the HUD) for a six-step guided demo: scan the
-QR, look around, teach him your things, tell him where you put one, go about your day, ask. Each
-step ticks itself off when it really happens; ← → or Back/Next step through it by hand.
+QR, look around, teach him your things, tell him where you put one, go about your day, ask.
+← → or Back/Next step through it.
 Play with the core: hover to draw a constellation, click to drop linked nodes, drag to spin the
 rings, double-click to overcharge it.
 Laptop audio: click the **audio** gauge (bottom right), or press **V**.
