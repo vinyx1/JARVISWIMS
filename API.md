@@ -2,6 +2,12 @@
 
 All endpoints are served by the backend on the same origin as the frontend.
 
+**Access key.** When the backend runs with `JARVIS_ACCESS_KEY` (`./start` sets a fresh one each
+run), every request that comes through the tunnel (Cloudflare's `cf-ray` / `cf-connecting-ip`
+headers) or from another machine needs it: `?k=<key>` on the first page load (the QR link), after
+which a `jarvis_key` cookie (HttpOnly, Secure, 12 h) carries it. Without it: `403`. Requests from
+the laptop itself (`localhost`) never need it. No key set means open, as in development.
+
 ## POST /frame
 
 Upload one camera frame. Send it as `multipart/form-data`:

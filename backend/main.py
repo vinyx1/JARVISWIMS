@@ -3,6 +3,7 @@ import asyncio
 import logging
 import os
 import re
+import secrets
 import shutil
 import subprocess
 import tempfile
@@ -12,7 +13,8 @@ import uuid
 from pathlib import Path
 
 from dotenv import load_dotenv
-from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Response, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, Form, HTTPException, Request, Response, UploadFile
+from fastapi.responses import HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
@@ -27,6 +29,41 @@ import voice  # noqa: E402  (Paul's ElevenLabs wrapper)
 log = logging.getLogger("uvicorn.error")
 app = FastAPI(title="jarvis")
 ASK_TIMEOUT_S = float(os.getenv("ASK_TIMEOUT_S", "12"))
+
+# ---------- access key: only people who scanned the QR can use the app through the tunnel ----------
+# scripts/demo.sh makes a fresh random key every run and puts it in the phone link (?k=...).
+# The first visit with the key sets a cookie, so the page's own requests get in too.
+# Requests on the laptop itself (the HUD at localhost) never need it. No key set = open (dev).
+ACCESS_KEY = os.getenv("JARVIS_ACCESS_KEY", "")
+KEY_COOKIE = "jarvis_key"
+_LOCKED = """<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>J.A.R.V.I.S.</title><body style="background:#05141c;color:#bfe9f5;font:17px system-ui;display:grid;
+place-items:center;min-height:100vh;margin:0;text-align:center;padding:24px">
+<div><h1 style="letter-spacing:.2em;font-size:20px">J.A.R.V.I.S.</h1>
+<p>Access denied, sir. Scan the QR code on the laptop to connect.</p></div></body>"""
+
+
+def _through_tunnel(request: Request) -> bool:
+    """Cloudflare adds these headers to every request it forwards; local requests don't have them."""
+    host = request.client.host if request.client else ""
+    return ("cf-connecting-ip" in request.headers or "cf-ray" in request.headers
+            or host not in ("127.0.0.1", "::1", "localhost", "testclient"))
+
+
+@app.middleware("http")
+async def require_access_key(request: Request, call_next):
+    if not ACCESS_KEY or not _through_tunnel(request):
+        return await call_next(request)
+    from_link = request.query_params.get("k", "")
+    given = from_link or request.cookies.get(KEY_COOKIE, "")
+    if not secrets.compare_digest(given.encode(), ACCESS_KEY.encode()):
+        if request.method == "GET" and "text/html" in request.headers.get("accept", ""):
+            return HTMLResponse(_LOCKED, status_code=403)
+        return Response(status_code=403)
+    response = await call_next(request)
+    if from_link:
+        response.set_cookie(KEY_COOKIE, ACCESS_KEY, max_age=12 * 3600, httponly=True, secure=True, samesite="lax")
+    return response
 
 
 _MY = re.compile(r"^\s*MY\s+(.+?)\s*\((.*?)\)\s*(.*)$")

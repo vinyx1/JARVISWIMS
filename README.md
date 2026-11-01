@@ -20,6 +20,11 @@ Or double-click **`Start Jarvis.command`** in Finder. The first run installs wha
    Start on the page that opens. The same QR prints in the terminal; press **Q** on the HUD
    to show it big at any time.
 
+**Locked to your QR:** each `./start` makes a new random key and builds it into the QR link.
+Only phones that scan it can use the app through the tunnel; anyone else with the bare link
+gets "Access denied". The HUD on the laptop needs no key. Mind that the QR on the projector is
+the key: anyone who scans it while it's up gets in (it hides once the camera feed starts).
+
 `./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
 **Talking to Jarvis:** the phone listens hands-free by default after your first tap (Start
 capture): just say "Jarvis, …", or hold **🎙 Hold to talk**. On the HUD, **hold Space** and speak

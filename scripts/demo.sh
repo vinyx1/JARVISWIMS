@@ -68,8 +68,10 @@ cleanup() {
 }
 trap cleanup INT TERM
 
+# A fresh access key every run: only phones that scan this run's QR can get in through the tunnel.
+ACCESS_KEY=$(backend/.venv/bin/python -c "import secrets; print(secrets.token_urlsafe(12))")
 c 36 "▶ Starting backend on :$PORT"
-backend/.venv/bin/uvicorn main:app --app-dir backend --host 0.0.0.0 --port $PORT > data/backend.log 2>&1 &
+JARVIS_ACCESS_KEY="$ACCESS_KEY" backend/.venv/bin/uvicorn main:app --app-dir backend --host 0.0.0.0 --port $PORT > data/backend.log 2>&1 &
 PIDS+=($!)
 for _ in $(seq 40); do curl -sf -o /dev/null "localhost:$PORT/latest" && break; sleep 0.25; done
 curl -sf -o /dev/null "localhost:$PORT/latest" || die "Backend didn't start. See data/backend.log"
@@ -98,13 +100,14 @@ if [[ -z "$URL" ]]; then
   die "No tunnel after 3 tries. Check the internet/hotspot; see data/tunnel.log"
 fi
 PIDS+=("$TUNNEL")
-printf '%s' "$URL/capture.html" > data/phone_url.txt   # the HUD turns this into a QR code
+PHONE_URL="$URL/capture.html?k=$ACCESS_KEY"
+printf '%s' "$PHONE_URL" > data/phone_url.txt   # the HUD turns this into a QR code
 
 # The Mac's own DNS often caches a miss for brand-new names, so check through 1.1.1.1.
 HOST=${URL#https://}; ok=0
 for _ in $(seq 30); do
   IP=$(dig +short @1.1.1.1 "$HOST" 2>/dev/null | head -1)
-  if [[ -n "$IP" ]] && [[ $(curl -s -o /dev/null -w '%{http_code}' -m 5 --resolve "$HOST:443:$IP" "$URL/capture.html") == 200 ]]; then ok=1; break; fi
+  if [[ -n "$IP" ]] && [[ $(curl -s -o /dev/null -w '%{http_code}' -m 5 --resolve "$HOST:443:$IP" "$PHONE_URL") == 200 ]]; then ok=1; break; fi
   sleep 2
 done
 
@@ -132,11 +135,12 @@ OSA
 [[ "${found:-0}" -gt 0 ]] || open -a "Google Chrome" "http://localhost:$PORT" 2>/dev/null || open "http://localhost:$PORT"
 
 echo
-c "1;32" "  iPhone →  $URL/capture.html"
-backend/.venv/bin/python -c "import segno,sys; segno.make(sys.argv[1], error='m').terminal(compact=True)" "$URL/capture.html" 2>/dev/null
+c "1;32" "  iPhone →  $PHONE_URL"
+backend/.venv/bin/python -c "import segno,sys; segno.make(sys.argv[1], error='m').terminal(compact=True)" "$PHONE_URL" 2>/dev/null
 c 2 "  (the same QR is on the HUD; press Q there to show it big)"
+c 2 "  Locked: only phones that scan this QR can connect (a new key every run)"
 (( ok )) || c 33 "  (tunnel not answering yet; wait ~30s, then refresh on the phone)"
-printf '%s' "$URL/capture.html" | pbcopy 2>/dev/null && echo "  (copied to clipboard: AirDrop or text it to the phone)"
+printf '%s' "$PHONE_URL" | pbcopy 2>/dev/null && echo "  (copied to clipboard: AirDrop or text it to the phone)"
 echo
 c 2 "  Talk: phone is hands-free (\"Jarvis, …\") after the first tap · HUD: hold Space (M = hands-free)"
 c 2 "  Checklist: iPhone Auto-Lock → Never · ⌃⌘F full screen · Q phone QR · V laptop audio · R clears memory"
