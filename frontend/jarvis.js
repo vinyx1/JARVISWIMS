@@ -255,6 +255,10 @@ function renderGuide() {
 function openGuide() { guideOpen = true; guideIdx = 0; if (mode === 'idle') showIdle(); else renderGuide(); }
 function closeGuide() { guideOpen = false; if (mode === 'idle') showIdle(); }
 $('guideOpen').onclick = openGuide;
+// Commands: every key in one list (button or ?)
+const toggleKeys = show => { $('keysOverlay').hidden = !(show ?? $('keysOverlay').hidden); };
+$('keysOpen').onclick = () => toggleKeys(true);
+$('keysOverlay').onclick = e => { if (e.target === $('keysOverlay')) toggleKeys(false); };
 $('guideClose').onclick = closeGuide;
 $('guidePrev').onclick = () => { guideIdx = Math.max(0, guideIdx - 1); renderGuide(); };
 $('guideNext').onclick = () => { if (guideIdx === GUIDE.length - 1) closeGuide(); else { guideIdx++; renderGuide(); } };
@@ -320,9 +324,14 @@ document.addEventListener('keydown', async e => {
   if (k === 'v') toggleAudio();
   if (k === 'q') $('qrOverlay').hidden = !$('qrOverlay').hidden;
   if (k === 'h') { if (guideOpen) closeGuide(); else openGuide(); }
+  if (k === '?' || (k === '/' && e.shiftKey)) toggleKeys();
   if (guideOpen && k === 'arrowright') $('guideNext').click();
   if (guideOpen && k === 'arrowleft') $('guidePrev').click();
-  if (k === 'escape') { if ($('qrOverlay').hidden && guideOpen) closeGuide(); $('qrOverlay').hidden = true; }
+  if (k === 'escape') {
+    if (!$('keysOverlay').hidden) toggleKeys(false);
+    else if ($('qrOverlay').hidden && guideOpen) closeGuide();
+    $('qrOverlay').hidden = true;
+  }
   if (k === 'd') location.href = '/debug.html';
   if (k === 'r') {
     convo.cancel(); speaker.stop();

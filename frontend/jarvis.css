@@ -216,3 +216,15 @@ body {
 .guide-nav button:hover, .guide-nav button:focus-visible { border-color: var(--cyan); color: #fff; }
 .guide-nav button.ghost { border-color: transparent; color: var(--muted); }
 .guide-nav button:disabled { opacity: .3; cursor: default; }
+
+/* Commands: the key list */
+.idle-actions { display: flex; gap: 12px; margin-top: 26px; }
+.idle-actions .guide-open { margin-top: 0; }
+.guide-open.subtle { border-color: rgba(95, 227, 255, .3); background: transparent; color: var(--text); }
+.keys-overlay { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(0, 4, 8, .82); animation: fade .25s forwards; }
+.keys-card { min-width: min(520px, 90vw); padding: 28px 34px; display: grid; gap: 18px; background: #06141c; border: 1px solid rgba(95, 227, 255, .3);
+  clip-path: polygon(16px 0, 100% 0, 100% calc(100% - 16px), calc(100% - 16px) 100%, 0 100%, 0 16px); }
+.keys-list { margin: 0; display: grid; grid-template-columns: auto 1fr; gap: 12px 22px; align-items: center; }
+.keys-list dt { justify-self: start; min-width: 2.6em; text-align: center; padding: 5px 9px; font: 400 11px var(--hud); letter-spacing: .08em; color: #fff;
+  border: 1px solid var(--cyan-2); background: rgba(95, 227, 255, .07); }
+.keys-list dd { margin: 0; font: 300 17px var(--body); color: var(--text); }

@@ -42,7 +42,10 @@
     <div id="idlePanel" class="idle-panel">
       <p id="greeting" class="greeting">Good evening, sir.</p>
       <p class="hint">Say <em>“Jarvis, …”</em> on the phone, or hold space here.</p>
-      <button id="guideOpen" class="guide-open" type="button">How it works <span aria-hidden="true">▸</span></button>
+      <div class="idle-actions">
+        <button id="guideOpen" class="guide-open" type="button">How it works <span aria-hidden="true">▸</span></button>
+        <button id="keysOpen" class="guide-open subtle" type="button">Commands <span aria-hidden="true">?</span></button>
+      </div>
       <div id="link" class="link" hidden>
         <img class="qr" data-qr alt="QR code: open the camera page on the iPhone">
         <div>
@@ -111,6 +114,25 @@
       <p class="micro">LINK THE SUIT CAMERA</p>
       <img class="qr big" data-qr alt="QR code: open the camera page on the iPhone">
       <p class="small">Scan with the iPhone camera &middot; Q to close</p>
+    </div>
+  </div>
+
+  <!-- every key, from the Commands button or ? -->
+  <div id="keysOverlay" class="keys-overlay" hidden>
+    <div class="keys-card" role="dialog" aria-label="Commands">
+      <p class="micro">Commands</p>
+      <dl class="keys-list">
+        <dt>Space</dt><dd>Hold to talk to Jarvis through the laptop mic</dd>
+        <dt>Enter</dt><dd>Type a question</dd>
+        <dt>Q</dt><dd>Show the QR code to link the phone</dd>
+        <dt>V</dt><dd>Jarvis's voice on the laptop, on or off</dd>
+        <dt>H</dt><dd>How it works: the walkthrough</dd>
+        <dt>D</dt><dd>Debug view: live camera, what he sees, chat, matches</dd>
+        <dt>R</dt><dd>Clear his memory (start a fresh demo)</dd>
+        <dt>?</dt><dd>This list</dd>
+        <dt>Esc</dt><dd>Close whatever is open</dd>
+      </dl>
+      <p class="small">On the core: hover, click, drag or double-click it.</p>
     </div>
   </div>
 

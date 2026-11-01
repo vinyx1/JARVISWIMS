@@ -51,7 +51,7 @@ QR, look around, teach him your things, tell him where you put one, go about you
 Play with the core: hover to draw a constellation, click to drop linked nodes, drag to spin the
 rings, double-click to overcharge it.
 Laptop audio: click the **audio** gauge (bottom right), or press **V**.
-HUD keys: **H** walkthrough · **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
+HUD keys (also listed under **Commands**, or press **?**): **H** walkthrough · **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
 **Q** phone QR · **D** debug view · **R** clear memory. Hands-free listening is on the phone.
 
 **Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →
