@@ -9,8 +9,7 @@
 //   await mic.start();        // from a tap/click: asks for the microphone
 //   mic.hold(true/false);     // push-to-talk: record exactly while held
 //   mic.auto = true;          // hands-free: emit every utterance the VAD finds
-//   mic.pause() / mic.resume()   // release the mic while Jarvis speaks (iPhone routes audio to
-//                                // the quiet earpiece while the mic is open)
+//   mic.pause() / mic.resume()   // ignore what the mic hears while Jarvis speaks; the mic stays on
 
 export const RATE = 16000;
 
@@ -101,6 +100,8 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
     if (ctx.state !== 'running') ctx.resume().catch(() => {});
   }
   async function open() {
+    // Safari 17+: record and play at once, keeping Jarvis on the loudspeaker while the mic is on.
+    try { if (navigator.audioSession) navigator.audioSession.type = 'play-and-record'; } catch {}
     stream = await media().getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}});
     wakeAudio();
     if (ctx.state !== 'running') await ctx.resume().catch(() => {});
@@ -147,8 +148,8 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
       if (n >= RATE * 0.3) { onUtterance(encodeWav(all), {manual: true}); return 'sent'; }
       return n === 0 ? 'not-ready' : 'too-short';
     },
-    /** Stop hearing (and on iPhone release the mic) while Jarvis talks. */
-    pause() { paused = true; held = false; heldChunks = []; vad.reset(); if (stream) close(); onLevel(0); },
+    /** Ignore what the mic hears while Jarvis talks (so he doesn't answer himself). The mic stays open. */
+    pause() { paused = true; held = false; heldChunks = []; vad.reset(); onLevel(0); },
     async resume() {
       if (!wanted) return;
       paused = false; vad.reset();

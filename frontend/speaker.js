@@ -1,8 +1,8 @@
 // Jarvis's voice on this device: POST /speak returns audio (ElevenLabs if configured, else the
 // Mac's British "say" voice), played automatically. play() resolves when Jarvis stops talking.
 //
-// iPhone only plays audio that a tap has unlocked, and releasing the microphone (which we do
-// right before Jarvis speaks) can suspend Web Audio. So playback tries, in order:
+// iPhone only plays audio that a tap has unlocked, and microphone changes can suspend Web Audio.
+// So playback tries, in order:
 //   1. Web Audio, resuming the context if iOS suspended it
 //   2. an <audio> element that was unlocked by the first tap (survives mic changes)
 //   3. the browser's own en-GB voice

@@ -63,7 +63,7 @@ $('phoneAudio').onchange=()=>{try{localStorage.setItem(AUDIO_KEY,$('phoneAudio')
 const audioOn=()=>$('phoneAudio').checked;
 async function speakHere(text){
   if(!audioOn())return;
-  mic.pause();   // don't hear ourselves; also keeps iPhone audio on the loudspeaker
+  mic.pause();   // the mic stays on, but ignores Jarvis's own voice
   try{await speaker.play(text);}finally{await mic.resume();}
 }
 

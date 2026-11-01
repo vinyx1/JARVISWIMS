@@ -172,7 +172,7 @@ function showVoiceChip(){$('micChip').textContent=laptopVoice?'🔊 LAPTOP AUDIO
 const speaker=createDeviceSpeaker();
 async function speakOnLaptop(text){
   if(!laptopVoice)return;
-  mic.pause();   // don't let the laptop mic hear Jarvis
+  mic.pause();   // the mic stays on, but ignores Jarvis's own voice
   try{await speaker.play(text);}finally{await mic.resume();}
 }
 
