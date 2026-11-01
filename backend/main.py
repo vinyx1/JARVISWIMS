@@ -27,10 +27,6 @@ import voice  # noqa: E402  (Paul's ElevenLabs wrapper)
 log = logging.getLogger("uvicorn.error")
 app = FastAPI(title="jarvis")
 ASK_TIMEOUT_S = float(os.getenv("ASK_TIMEOUT_S", "12"))
-# Gold box around the item in the answer photo (Kenny's locate_object). Adds ~2s per answer.
-# Turn it off with JARVIS_BOX=0 in .env if answers feel slow; the HUD just shows the photo.
-BOX_ON = os.getenv("JARVIS_BOX", "1") != "0"
-BOX_TIMEOUT_S = float(os.getenv("BOX_TIMEOUT_S", "5"))
 
 
 def _with_mine(fn, *args):
@@ -126,45 +122,17 @@ async def _remember(item: str) -> dict:
             "frames": [{"id": frame["id"], "url": frame["url"], "ts": frame["ts"], "note": description}]}
 
 
-async def _add_boxes(result: dict) -> dict:
-    """Attach frames[].box = [x0, y0, x1, y1] (fractions) to the photos the HUD will outline.
-
-    find/remember: every frame (they're the candidates); retrace: only the target (last).
-    Runs the calls in parallel, capped at BOX_TIMEOUT_S; a missing box just means no outline.
-    """
-    frames = result.get("frames") or []
-    if not BOX_ON or not frames or result.get("kind") not in ("find", "retrace", "remember"):
-        return result
-    targets = frames[-1:] if result["kind"] == "retrace" else frames[:3]
-
-    def locate(f: dict):
-        path = store.FRAMES / f"{f['id']}.jpg"
-        return ai.locate_object(path.read_bytes(), f.get("note") or "") if path.exists() and f.get("note") else None
-
-    try:
-        boxes = await asyncio.wait_for(
-            asyncio.gather(*(asyncio.to_thread(locate, f) for f in targets), return_exceptions=True),
-            timeout=BOX_TIMEOUT_S)
-    except asyncio.TimeoutError:
-        log.warning("locate_object timed out after %ss; answering without the outline", BOX_TIMEOUT_S)
-        return result
-    for f, box in zip(targets, boxes):
-        if isinstance(box, list) and len(box) == 4:
-            f["box"] = box
-    return result
-
-
 async def _answer_request(body: Ask):
     """Never leave Jarvis silent on stage: time out or fail into an in-character reply."""
     try:
         item = remember_item(body.question)
         if item:
-            return await _add_boxes(await _remember(item))
+            return await _remember(item)
         captioned = [e for e in store.read_log() if e["caption"]]
         result = await asyncio.wait_for(
             asyncio.to_thread(_with_mine, answer.answer, body.question, captioned), timeout=ASK_TIMEOUT_S
         )
-        return await _add_boxes(result)
+        return result
     except asyncio.TimeoutError:
         log.warning("/ask timed out after %ss: %r", ASK_TIMEOUT_S, body.question)
         return {"answer": "My apologies, sir, the footage is taking longer than expected. Ask me again in a moment.",
