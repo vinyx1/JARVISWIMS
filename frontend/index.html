@@ -6,76 +6,73 @@
   <meta name="color-scheme" content="dark">
   <title>J.A.R.V.I.S.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Oxanium:wght@300;500;700&family=Share+Tech+Mono&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="hud.css">
 </head>
-<body class="booting">
-  <!-- Owner: Jogindar (A). Laptop HUD shown on the projector. Glass redesign by Paul with Jogindar's OK. See CLAUDE.md. -->
-  <main class="stage" aria-label="Suit camera heads-up display">
-    <!-- full-screen live feed: a blurred copy fills the screen, the real frame sits on top uncropped -->
-    <img id="liveBg" class="live-bg" alt="" hidden>
-    <img id="live" class="live" alt="Latest frame from the phone" hidden>
-    <div class="vignette" aria-hidden="true"></div>
-
-    <div id="idle" class="idle">
-      <p>AWAITING VISUAL FEED</p>
-      <p class="hint">Open the capture page on the iPhone and press Start.</p>
+<body>
+  <!-- Laptop HUD on the projector: live feed, plus the COMMS side panel (chat, evidence, typed questions). -->
+  <header class="top">
+    <div class="brand"><span class="arc"></span>J.A.R.V.I.S.<span class="sub">MARK I · LOST &amp; FOUND PROTOCOL</span></div>
+    <div class="chips">
+      <span id="liveChip" class="chip live" hidden>● LIVE</span>
+      <span id="linkChip" class="chip">LINK ···</span>
+      <span id="frameChip" class="chip">FRAMES 0</span>
+      <span id="micChip" class="chip">VOICE ON PHONE</span>
     </div>
+  </header>
 
-    <header class="top">
-      <div class="brand">
-        <!-- core: gold while listening, blinks while thinking, glows with Jarvis's voice -->
-        <span class="core" aria-hidden="true"></span>
-        <span class="name">J.A.R.V.I.S.</span>
-        <span id="scanState" class="scan-state">STANDBY</span>
-        <span id="ear" class="ear" aria-live="polite"></span>
-      </div>
-      <div class="chips">
-        <span id="room" class="v">ROOM —</span>
-        <span id="age" class="dim">—</span>
-        <span id="liveChip" class="chip live" hidden>● LIVE</span>
-        <span id="frameChip" class="chip">FRAMES 0</span>
-        <span id="linkChip" class="chip">LINK ···</span>
-        <span id="micChip" class="chip">VOICE ON PHONE</span>
-      </div>
-    </header>
-
-    <div class="side left">
-      <!-- what the suit sees right now -->
-      <section class="card in-view" aria-label="Objects and landmarks in view">
-        <div class="label">IN VIEW</div>
-        <ul id="objects" class="objects"></ul>
-        <p id="scene" class="sr-only"></p>
-      </section>
-
-      <section class="card my-items" aria-label="My registered items">
-        <div class="label">MY ITEMS</div>
-        <ul id="myItems"><li class="empty-item">No items registered yet.</li></ul>
-        <p id="mineStatus" class="mine-status" role="status" hidden></p>
-      </section>
-    </div>
-
-    <!-- answer: evidence photo, candidates or the way back -->
-    <aside id="evidence" class="card evidence" hidden aria-label="Where Jarvis last saw it">
-      <div id="evidenceTitle" class="label">LAST SEEN</div>
-      <figure class="hero">
-        <div class="hero-media">
-          <img id="heroImg" alt="Where Jarvis last saw it">
+  <main class="hud">
+    <section class="feed" aria-label="Live view from the suit camera">
+      <div class="viewport">
+        <img id="live" alt="Latest frame from the phone" hidden>
+        <div id="idle" class="idle">
+          <div class="reticle"></div>
+          <p>AWAITING VISUAL FEED</p>
+          <p class="hint">Open the capture page on the iPhone and press Start.</p>
         </div>
-        <figcaption id="heroCap"></figcaption>
-      </figure>
-      <div id="candidates" class="candidate-options" aria-label="Possible object matches" hidden></div>
-      <div class="label" id="trailTitle" hidden>ROUTE BACK</div>
-      <ol id="trail" class="trail"></ol>
-    </aside>
-
-    <!-- subtitles: hidden by default because Jarvis speaks; T shows the last exchange -->
-    <section class="subs" aria-label="Subtitles">
-      <div id="transcript" class="transcript" aria-live="polite"></div>
-      <div id="heard" class="heard"></div>
+        <span class="bracket tl"></span><span class="bracket tr"></span>
+        <span class="bracket bl"></span><span class="bracket br"></span>
+        <div class="scanline"></div>
+        <div class="overlay-top">
+          <span id="room" class="tag room">ROOM —</span>
+          <span id="age" class="tag">—</span>
+        </div>
+        <div id="scanState" class="scan-state">SCANNING</div>
+        <div class="overlay-bottom">
+          <div id="scene" class="scene"></div>
+          <div id="objects" class="labels"></div>
+        </div>
+      </div>
     </section>
 
-    <div class="engage">VOICE ON PHONE<small>Use the capture page to talk · V voice on laptop · T subtitles · R reset</small></div>
+    <section class="jarvis" aria-label="Jarvis">
+      <div class="panel-title">COMMS</div>
+      <div id="transcript" class="transcript" aria-live="polite">
+        <p class="line sys">Say <b>"Hey Jarvis, where did I leave my helmet?"</b> on the phone, or type below.<br>
+          <kbd>V</kbd> laptop voice · <kbd>R</kbd> clears memory.</p>
+      </div>
+      <div id="heard" class="heard"></div>
+
+      <div id="evidence" class="evidence" hidden>
+        <div id="evidenceTitle" class="panel-title">LAST SEEN</div>
+        <figure class="hero">
+          <div class="hero-media">
+            <img id="heroImg" alt="Where Jarvis last saw it">
+          </div>
+          <figcaption id="heroCap"></figcaption>
+        </figure>
+        <div id="candidates" class="candidate-options" aria-label="Possible object matches" hidden></div>
+        <div class="panel-title" id="trailTitle" hidden>ROUTE BACK</div>
+        <ol id="trail" class="trail"></ol>
+      </div>
+
+      <section class="my-items" aria-label="My registered items"><div class="panel-title">MY ITEMS</div><ul id="myItems"><li class="empty-item">No items registered yet.</li></ul><p id="mineStatus" class="mine-status" role="status" hidden></p></section>
+
+      <form id="askForm" class="ask">
+        <input id="q" placeholder="Type to Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
+        <button>SEND</button>
+      </form>
+    </section>
   </main>
 
   <div id="toast" class="toast" hidden></div>

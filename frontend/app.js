@@ -1,5 +1,6 @@
-// Laptop HUD. Owner: Jogindar (A); glass redesign by Paul. Live feed via GET /latest + /preview.jpg,
-// Phone owns input and speech; this page displays completed exchanges and evidence.
+// Laptop HUD: live feed (GET /latest + /preview.jpg) and the COMMS side panel.
+// The phone asks by voice; the chat box here asks by typing. Every completed exchange,
+// from either, arrives through GET /interaction and is shown in the chat.
 import { createApi } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
 
@@ -17,28 +18,27 @@ function showLatest(entry, { linked = true } = {}) {
   $('frameChip').textContent = `FRAMES ${entry ? parseInt(entry.id.replace(/\D/g, ''), 10) + 1 : 0}`;
   if (linked) { $('linkChip').textContent = 'LINK OK'; $('linkChip').classList.add('ok'); $('linkChip').classList.remove('bad'); }
   if (!path) {
-    if (!previewLive()) { $('live').hidden = true; $('liveBg').hidden = true; $('idle').hidden = false; }
+    if (!previewLive()) { $('live').hidden = true; $('idle').hidden = false; }
     $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren();
     $('scanState').textContent = 'STANDBY'; $('scanState').classList.remove('busy'); $('age').textContent = '—'; return;
   }
   const src = `${path}?v=${entry.ts}`;
   if (!previewLive() && $('live').getAttribute('src') !== src) setLive(src);
-  $('live').hidden = false; $('liveBg').hidden = false; $('idle').hidden = true;
+  $('live').hidden = false; $('idle').hidden = true;
   $('age').textContent = formatSeenAt(entry.ts).toUpperCase();
   const c = entry.caption;
   if (!c) { $('room').textContent = 'ROOM —'; $('scene').textContent = ''; $('objects').replaceChildren(); $('scanState').textContent = 'ANALYZING…'; $('scanState').classList.add('busy'); return; }
   $('scanState').textContent = 'SCANNING'; $('scanState').classList.remove('busy');
   $('room').textContent = `ROOM ${(c.room_guess || 'unknown').toUpperCase()}`;
   $('scene').textContent = c.scene || '';
-  // gold squares = movable objects (things you can lose), cyan outlines = landmarks
+  // gold = movable objects (things you can lose), cyan = landmarks
   $('objects').replaceChildren(
-    ...(c.objects || []).slice(0, 5).map(o => el('li', 'obj', o)),
-    ...(c.landmarks || []).slice(0, 3).map(l => el('li', 'mark', l)),
+    ...(c.objects || []).slice(0, 6).map(o => el('span', 'tag obj', o)),
+    ...(c.landmarks || []).slice(0, 4).map(l => el('span', 'tag mark', l)),
   );
 }
 
-// the frame on top plus its blurred copy that fills the rest of the screen
-function setLive(src) { $('live').src = src; $('liveBg').src = src; }
+function setLive(src) { $('live').src = src; }
 
 // ---------- live preview (~5 fps from the phone, display only) ----------
 let previewAt = 0, previewUrl = null, previewTimer = null, previewController = null;
@@ -65,7 +65,7 @@ async function pollPreview(token) {
       if (!previewWanted || token !== previewGeneration) return;
       if (blob.type.startsWith('image/')) {
         const url = URL.createObjectURL(blob);
-        setLive(url); $('live').hidden = false; $('liveBg').hidden = false; $('idle').hidden = true;
+        setLive(url); $('live').hidden = false; $('idle').hidden = true;
         if (previewUrl) URL.revokeObjectURL(previewUrl);
         previewUrl = url; previewAt = Date.now();
       }
@@ -185,13 +185,30 @@ const interactions=createLatestPoller({
     if(!exchange){interactionId=null;hideEvidence();return;}
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
-    if(laptopVoice&&!firstExchange)void speakOnLaptop(exchange.result.answer);   // never replay an old answer on page load
+    const typedHere=typed.has(exchange.question);typed.delete(exchange.question);
+    // never replay an old answer on page load; typed questions are always answered out loud here
+    if((laptopVoice||typedHere)&&!firstExchange)void speakOnLaptop(exchange.result.answer);
     firstExchange=false;
+    document.querySelectorAll('.line.pending').forEach(line=>line.remove());
     say('you',exchange.question);say('jarvis',exchange.result.answer);
     showEvidence(exchange.result);
+    // the photo just shrank the chat: keep the newest reply in view
+    requestAnimationFrame(()=>{$('transcript').scrollTop=$('transcript').scrollHeight;});
   },
   onError(){ /* Camera status remains independent; a later poll can recover. */ }
 });
+// ---------- chat box: typed questions from the laptop ----------
+const typed=new Set();
+$('askForm').onsubmit=async e=>{
+  e.preventDefault();
+  const question=$('q').value.trim();
+  if(!question||resetting)return;
+  $('q').value='';typed.add(question);
+  const pending=say('jarvis','Checking the footage, sir…');pending.classList.add('pending');
+  try{await api.askQuestion(question);}   // the answer itself arrives via /interaction
+  catch(error){typed.delete(question);pending.classList.remove('pending');pending.textContent=`JARVIS ${error.message}`;}
+};
+
 // the first poll may return an answer from before this page loaded: never speak that one
 setTimeout(()=>{firstExchange=false;},2500);
 showVoiceChip();
@@ -200,14 +217,13 @@ document.addEventListener('keydown',async e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable||resetting)return;
   const plain=!e.repeat&&!e.metaKey&&!e.ctrlKey&&!e.altKey;
   if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopVoice',laptopVoice?'1':'0');}catch{}showVoiceChip();toast(laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE');}
-  if((e.key==='t'||e.key==='T')&&plain){const on=document.body.classList.toggle('subs-on');toast(on?'SUBTITLES ON':'SUBTITLES OFF');}
   if((e.key==='r'||e.key==='R')&&plain)await reset();
   if(e.key==='Escape')$('evidence').hidden=true;
 });
 
 async function reset() {
   if (resetting) return;
-  resetting = true; mineGeneration++; hideEvidence();
+  resetting = true; mineGeneration++; hideEvidence(); $('q').disabled = true;
   document.body.classList.remove('thinking'); poller.stop(); stopPreview(); interactions.stop();
   $('evidence').hidden = true;
   document.querySelectorAll('.line.pending').forEach(line => { line.classList.remove('pending'); line.textContent = 'JARVIS Question cancelled by memory reset.'; });
@@ -219,7 +235,7 @@ async function reset() {
     toast('MEMORY CLEARED');
   } catch (error) { toast(error.status===409?'WAIT FOR PHONE QUESTION TO FINISH':'RESET FAILED'); console.error(error); }
   finally {
-    resetting = false;
+    resetting = false; $('q').disabled = false;
     poller.start(); startPreview(); interactions.start(); void refreshMine();
   }
 }

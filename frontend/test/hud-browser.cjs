@@ -51,8 +51,6 @@ let browser;
  latest=first;await page.getByText('red helmet',{exact:true}).waitFor();
  async function ask(question){await page.evaluate(async question=>{await fetch('/ask',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({question})});},question);await page.waitForFunction(q=>document.getElementById('transcript').textContent.includes(q),question);}
  await ask('Where is my helmet?');await page.waitForFunction(a=>document.getElementById('transcript').textContent.includes(a),answer);
- check(!await page.locator('.subs').isVisible(),'subtitles must be hidden by default');
- await page.keyboard.press('t');check(await page.locator('.subs').isVisible()&&await page.locator('.subs').textContent().then(t=>t.includes(answer)),'T must show the answer as a subtitle');await page.keyboard.press('t');
  check(await page.locator('#evidence').isVisible(),'find answer must include evidence');
  check(new URL(await page.locator('#heroImg').getAttribute('src'),'http://localhost').pathname==='/frames/f_000001.jpg','find must show matched photo');
  check(await page.locator('#transcript').textContent().then(t=>t.includes(answer)),"Paul's full find answer must remain visible");
