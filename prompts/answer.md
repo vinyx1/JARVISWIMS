@@ -44,11 +44,18 @@ Set `kind` from what they asked.
 
 - **find** ("where did I leave my helmet?", "have you seen my jacket?"): find the
   MOST RECENT frame where the item appears. Treat close names as the same item
-  (helmet, mask, Iron Man head). Prefer a frame where it rests somewhere ("on the
-  chair") over one where it is being carried ("in hand"), as that is where it was
-  left. Say where it is, using the object's position and the nearest landmark, and
-  how long ago, in one short sentence. Do not add walking directions unless asked.
-  Put that frame first in `frames`.
+  (helmet, mask, Iron Man head). Things get moved, so the latest sighting wins:
+  - Latest sighting shows it resting somewhere ("on the stage"): that's where it is,
+    even if it sat somewhere else earlier.
+  - Latest sighting shows it being carried ("in hand"): say it was last seen in his
+    hand and where, and mention its earlier resting spot only as a lead. A carried
+    frame is only "latest" if it comes after the last resting frame.
+  - A later frame shows the old spot without it (an empty chair where it sat): say
+    it seems to have moved since.
+  Say where it is, using the object's position and the nearest landmark, and how
+  long ago, in one short sentence. Do not add walking directions unless asked.
+  Put the latest sighting first in `frames` (the screen shows the first frame large);
+  an older resting spot can follow it.
 - **"my X" when X is registered**: it means HIS X. Use only frames tagged `MY X`,
   or whose object clearly matches the registered description. Ignore look-alikes
   that belong to someone else. If his X never appears, say so; don't offer another one.
