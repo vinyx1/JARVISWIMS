@@ -6,6 +6,8 @@
 //   core.state = 'idle' | 'armed' | 'listening' | 'thinking' | 'speaking';
 //   core.level = 0..1;      // voice/mic loudness: the core breathes with it
 //   core.boot = 0..1;       // intro: rings draw themselves in as this rises
+//   core.interactive = true // a toy: hover draws a constellation, click drops linked nodes,
+//                           // drag spins the rings, double-click overcharges the core
 
 const TAU = Math.PI * 2;
 const PRESETS = {
@@ -24,6 +26,48 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
   let [spin, glow, open, inflow, sweep, amber] = PRESETS.idle;
   let target = PRESETS.idle, state = 'idle', level = 0, pulse = 0, boot = 1;
   let rot = 0, last = performance.now(), raf = 0, w = 0, h = 0, dpr = 1, showReadouts = true;
+  // ---- toy mode ----
+  let interactive = false, pointer = null, dragging = false, dragAngle = 0, dragMoved = 0, spinVel = 0, flare = 0;
+  const nodes = [], ripples = [], NODE_LIFE = 25, MAX_NODES = 28;
+  const local = e => { const r = canvas.getBoundingClientRect(); return {x: e.clientX - r.left - w / 2, y: e.clientY - r.top - h / 2}; };
+  const radius = () => Math.min(w, h) * 0.42;
+  const onMove = e => {
+    if (!interactive) return;
+    pointer = local(e);
+    if (dragging) {
+      const a = Math.atan2(pointer.y, pointer.x); let d = a - dragAngle;
+      if (d > Math.PI) d -= TAU; if (d < -Math.PI) d += TAU;
+      rot += d * 1.4; spinVel = spinVel * 0.6 + d * 1.4 * 0.4 * 60; dragAngle = a; dragMoved += Math.abs(d);
+    }
+  };
+  const onDown = e => {
+    if (!interactive) return;
+    pointer = local(e); dragging = true; dragMoved = 0; dragAngle = Math.atan2(pointer.y, pointer.x); spinVel = 0;
+    canvas.setPointerCapture?.(e.pointerId); canvas.style.cursor = 'grabbing';
+  };
+  const onUp = e => {
+    if (!interactive || !dragging) return;
+    dragging = false; canvas.style.cursor = 'crosshair';
+    if (dragMoved < 0.05) {   // a click, not a drag: drop a node with a ripple
+      const R = radius(), p = local(e);
+      nodes.push({x: p.x / R, y: p.y / R, born: performance.now() / 1000, seed: Math.random() * TAU});
+      if (nodes.length > MAX_NODES) nodes.shift();
+      ripples.push({x: p.x / R, y: p.y / R, born: performance.now() / 1000, big: false});
+    }
+  };
+  const onDouble = e => {
+    if (!interactive) return;
+    flare = 1; nodes.splice(-2);   // the two clicks of a double-click shouldn't leave nodes
+    ripples.push({x: 0, y: 0, born: performance.now() / 1000, big: true});
+    for (const p of parts) p.r = Math.min(1.45, p.r + 0.35 + Math.random() * 0.35);   // blast outward
+  };
+  const onLeave = () => { pointer = null; };
+  canvas.addEventListener('pointermove', onMove);
+  canvas.addEventListener('pointerdown', onDown);
+  canvas.addEventListener('pointerup', onUp);
+  canvas.addEventListener('pointercancel', onUp);
+  canvas.addEventListener('pointerleave', onLeave);
+  canvas.addEventListener('dblclick', onDouble);
   const motion = reducedMotion ? 0.25 : 1;
   const parts = Array.from({length: 240}, () => newParticle(true));
   const readouts = [
@@ -62,7 +106,7 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
     if (R <= 4) return;
     ctx.translate(w / 2, h / 2);
     ctx.globalCompositeOperation = 'lighter';
-    const g = glow * (0.85 + 0.15 * Math.sin(t * 1.3));
+    const g = Math.min(1.4, glow * (0.85 + 0.15 * Math.sin(t * 1.3)) + flare * 0.6);
 
     // 1. outer tick ring
     const k1 = reveal(0, 0.35);
@@ -139,28 +183,89 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
     // 8. particles: orbit, and drift into the core when he's listening or thinking
     const k8 = reveal(0.2, 0.6);
     if (k8) {
+      const reach = R * 0.3, near = [];
       for (const p of parts) {
         p.a += dt * p.s * (0.12 + spin * 0.55) * motion;
         p.r -= dt * (0.04 + 0.32 * inflow) * p.r * motion;
         if (p.r < 0.14) Object.assign(p, newParticle(false));
+        let x = Math.cos(p.a) * R * p.r, y = Math.sin(p.a) * R * p.r * 0.985;
+        let excite = 0;
+        if (pointer && !dragging) {   // drift toward the cursor, and light up near it
+          const dx = pointer.x - x, dy = pointer.y - y, d = Math.hypot(dx, dy);
+          if (d < reach) {
+            excite = 1 - d / reach;
+            const pr = Math.hypot(pointer.x, pointer.y) / R, pa = Math.atan2(pointer.y, pointer.x);
+            let da = pa - p.a; if (da > Math.PI) da -= TAU; if (da < -Math.PI) da += TAU;
+            p.a += da * dt * 1.2 * excite; p.r += (pr - p.r) * dt * 1.2 * excite;
+            near.push([x, y, excite]);
+          }
+        }
         const tw = 0.45 + 0.55 * Math.sin(t * (2 + p.z * 3) + p.f);
-        const x = Math.cos(p.a) * R * p.r, y = Math.sin(p.a) * R * p.r * 0.985;
-        ctx.fillStyle = (p.z > 0.86 ? accent : cyan)(k8 * tw * (0.25 + 0.55 * p.z) * g);
-        ctx.fillRect(x, y, 0.8 + p.z * 1.6, 0.8 + p.z * 1.6);
+        ctx.fillStyle = (p.z > 0.86 || excite > 0.5 ? accent : cyan)(Math.min(1, k8 * tw * (0.25 + 0.55 * p.z) * g + excite * 0.8));
+        const size = 0.8 + p.z * 1.6 + excite * 1.6;
+        ctx.fillRect(x - size / 2, y - size / 2, size, size);
+        p.x = x; p.y = y;
+      }
+      // a small targeting ring follows the cursor
+      if (pointer && interactive) {
+        ctx.setLineDash([]); ctx.lineWidth = 1; ctx.strokeStyle = accent(dragging ? 0.8 : 0.55, 0.7);
+        ctx.beginPath(); ctx.arc(pointer.x, pointer.y, dragging ? 14 : 10, t * 2, t * 2 + TAU * 0.75); ctx.stroke();
+      }
+      // constellation: cursor to nearby particles, and those particles to each other
+      if (pointer && !dragging && near.length) {
+        ctx.lineWidth = 0.8; ctx.setLineDash([]);
+        for (let i = 0; i < near.length; i++) {
+          const [x, y, e] = near[i];
+          ctx.strokeStyle = cyan(0.7 * e); ctx.beginPath(); ctx.moveTo(pointer.x, pointer.y); ctx.lineTo(x, y); ctx.stroke();
+          for (let j = i + 1; j < near.length; j++) {
+            const [x2, y2, e2] = near[j];
+            if (Math.hypot(x - x2, y - y2) < reach * 0.4) { ctx.strokeStyle = cyan(0.42 * Math.min(e, e2)); ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x2, y2); ctx.stroke(); }
+          }
+        }
       }
     }
     // 9. the core
     const k9 = reveal(0.55, 0.45);
     if (k9) {
-      const rc = R * (0.2 + 0.05 * pulse + 0.07 * level) * k9;
+      const rc = R * (0.2 + 0.05 * pulse + 0.07 * level + 0.12 * flare) * k9;
       const grad = ctx.createRadialGradient(0, 0, 0, 0, 0, rc * 1.9);
       grad.addColorStop(0, `rgba(255,255,255,${0.95 * g})`);
-      grad.addColorStop(0.18, accent(0.85 * g, amber * 0.5));
+      grad.addColorStop(0.18, accent(0.85 * g, Math.max(amber * 0.5, flare)));
       grad.addColorStop(0.5, cyan(0.22 * g));
       grad.addColorStop(1, cyan(0));
       ctx.fillStyle = grad; ctx.beginPath(); ctx.arc(0, 0, rc * 1.9, 0, TAU); ctx.fill();
       arc(rc * 0.62, 0, TAU, 1, `rgba(255,255,255,${0.55 * g})`);
     }
+    // 9b. toy mode: dropped nodes (linked to each other and to nearby particles) and ripples
+    const now = performance.now() / 1000;
+    for (let i = nodes.length - 1; i >= 0; i--) if (now - nodes[i].born > NODE_LIFE) nodes.splice(i, 1);
+    if (nodes.length) {
+      const life = n => Math.min(1, (NODE_LIFE - (now - n.born)) / 4) * Math.min(1, (now - n.born) * 4);
+      ctx.setLineDash([]);
+      for (let i = 0; i < nodes.length; i++) {
+        const a = nodes[i], ax = a.x * R + Math.cos(t * 0.7 + a.seed) * 3, ay = a.y * R + Math.sin(t * 0.9 + a.seed) * 3, la = life(a);
+        for (let j = i + 1; j < nodes.length; j++) {
+          const b = nodes[j], bx = b.x * R, by = b.y * R, d = Math.hypot(ax - bx, ay - by);
+          if (d < R * 0.75) { ctx.lineWidth = 1.2; ctx.strokeStyle = accent(0.85 * (1 - d / (R * 0.75)) * Math.min(la, life(b)), 0.7); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(bx, by); ctx.stroke(); }
+        }
+        for (const p of parts) {
+          if (p.x === undefined) continue;
+          const d = Math.hypot(ax - p.x, ay - p.y);
+          if (d < R * 0.16) { ctx.lineWidth = 0.8; ctx.strokeStyle = cyan(0.55 * (1 - d / (R * 0.16)) * la); ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(p.x, p.y); ctx.stroke(); }
+        }
+        const pulseN = 0.6 + 0.4 * Math.sin(t * 3 + a.seed);
+        ctx.fillStyle = accent(0.25 * la * pulseN, 0.7); ctx.beginPath(); ctx.arc(ax, ay, 9, 0, TAU); ctx.fill();
+        ctx.fillStyle = `rgba(255,255,255,${0.9 * la})`; ctx.beginPath(); ctx.arc(ax, ay, 2.6, 0, TAU); ctx.fill();
+      }
+    }
+    for (let i = ripples.length - 1; i >= 0; i--) {
+      const r = ripples[i], age = now - r.born, span = r.big ? 1.2 : 0.8;
+      if (age > span) { ripples.splice(i, 1); continue; }
+      const k = age / span, rr = (r.big ? R * 1.25 : R * 0.22) * (0.15 + 0.85 * k);
+      ctx.beginPath(); ctx.arc(r.x * R, r.y * R, rr, 0, TAU);
+      ctx.lineWidth = r.big ? 3 * (1 - k) + 1 : 1.5; ctx.strokeStyle = (r.big ? accent : cyan)(0.8 * (1 - k)); ctx.setLineDash([]); ctx.stroke();
+    }
+
     // 10. readouts with leader lines
     const k10 = showReadouts ? reveal(0.8, 0.2) : 0;   // hidden behind the intro title
     if (k10) {
@@ -185,6 +290,8 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
     [spin, glow, open, inflow, sweep, amber] = [spin, glow, open, inflow, sweep, amber].map((v, i) => v + (target[i] - v) * k);
     pulse += ((state === 'speaking' ? level : level * 0.5) - pulse) * (1 - Math.exp(-dt * 12));
     rot += dt * spin * motion;
+    if (!dragging && Math.abs(spinVel) > 0.001) { rot += spinVel * dt; spinVel *= Math.exp(-dt * 1.6); }   // flung rings coast down
+    flare = Math.max(0, flare - dt * 0.7);
     draw(now / 1000, dt);
     raf = requestAnimationFrame(frame);
   }
@@ -196,6 +303,10 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
     set level(v) { level = Math.max(0, Math.min(1, v || 0)); },
     set boot(v) { boot = Math.max(0, Math.min(1, v)); },
     set readouts(v) { showReadouts = !!v; },
-    destroy() { cancelAnimationFrame(raf); ro?.disconnect(); },
+    set interactive(v) { interactive = !!v; canvas.style.cursor = v ? 'crosshair' : ''; canvas.style.touchAction = v ? 'none' : ''; if (!v) { pointer = null; dragging = false; } },
+    destroy() {
+      cancelAnimationFrame(raf); ro?.disconnect();
+      for (const [ev, fn] of [['pointermove', onMove], ['pointerdown', onDown], ['pointerup', onUp], ['pointercancel', onUp], ['pointerleave', onLeave], ['dblclick', onDouble]]) canvas.removeEventListener(ev, fn);
+    },
   };
 }

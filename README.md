@@ -45,6 +45,8 @@ pulsing while he answers, with the photo of where he saw your item. **D** switch
 view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS) and back.
 The previous HUD is also saved as the git tag `ui-classic`.
 
+Play with the core: hover to draw a constellation, click to drop linked nodes, drag to spin the
+rings, double-click to overcharge it.
 Laptop audio: click the **audio** gauge (bottom right), or press **V**.
 HUD keys: **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
 **Q** phone QR · **D** debug view · **R** clear memory. Hands-free listening is on the phone.

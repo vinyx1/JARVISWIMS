@@ -256,7 +256,7 @@ async function intro() {
 $('engage').onclick = () => finishIntro();
 function finishIntro() {
   if (booted) return;
-  booted = true; core.boot = 1; core.readouts = true; $('engage').hidden = true;
+  booted = true; core.boot = 1; core.readouts = true; core.interactive = true; $('engage').hidden = true;
   document.body.dataset.phase = 'ready'; setMode('idle'); showIdle(); void readouts();
 }
 
