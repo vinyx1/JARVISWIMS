@@ -41,4 +41,8 @@ Fill in the fields:
   Use the same name for the same landmark every time you see it.
 
 Use empty lists when nothing qualifies. If the frame is blurry or dark, start "scene" with
-"blurry frame" (or "dark frame") and list only what you can actually identify. Don't guess.
+"blurry frame" (or "dark frame"). Still list the objects you can make out, and for anything you
+can't identify for sure, give your best guess marked "possibly", with the shape and color you
+do see: "possibly black water bottle on desk", "possibly dark bag on floor". Someone may be
+looking for exactly that item later, so a marked guess is far more useful than leaving it out.
+Don't invent things you can't see at all.
