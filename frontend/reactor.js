@@ -23,7 +23,7 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
   const ctx = canvas.getContext('2d');
   let [spin, glow, open, inflow, sweep, amber] = PRESETS.idle;
   let target = PRESETS.idle, state = 'idle', level = 0, pulse = 0, boot = 1;
-  let rot = 0, last = performance.now(), raf = 0, w = 0, h = 0, dpr = 1;
+  let rot = 0, last = performance.now(), raf = 0, w = 0, h = 0, dpr = 1, showReadouts = true;
   const motion = reducedMotion ? 0.25 : 1;
   const parts = Array.from({length: 240}, () => newParticle(true));
   const readouts = [
@@ -162,10 +162,10 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
       arc(rc * 0.62, 0, TAU, 1, `rgba(255,255,255,${0.55 * g})`);
     }
     // 10. readouts with leader lines
-    const k10 = reveal(0.8, 0.2);
+    const k10 = showReadouts ? reveal(0.8, 0.2) : 0;   // hidden behind the intro title
     if (k10) {
       ctx.globalCompositeOperation = 'source-over';
-      ctx.font = `${Math.max(10, R * 0.038)}px "Chakra Petch", "Arial Narrow", sans-serif`;
+      ctx.font = `${Math.max(8, R * 0.028)}px Michroma, Eurostile, sans-serif`;
       for (const r of readouts) {
         // leader lines stay inside the canvas (its edge is ~1.19 R from the centre)
         const x0 = Math.cos(r.angle) * R * 0.97, y0 = Math.sin(r.angle) * R * 0.97;
@@ -195,6 +195,7 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
     set state(s) { state = s; target = presetFor(s); },
     set level(v) { level = Math.max(0, Math.min(1, v || 0)); },
     set boot(v) { boot = Math.max(0, Math.min(1, v)); },
+    set readouts(v) { showReadouts = !!v; },
     destroy() { cancelAnimationFrame(raf); ro?.disconnect(); },
   };
 }

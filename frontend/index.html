@@ -6,7 +6,7 @@
   <meta name="color-scheme" content="dark">
   <title>J.A.R.V.I.S.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@200;300;400&family=Saira:wght@300;400&family=Chakra+Petch:wght@300;400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="jarvis.css">
 </head>
 <body data-phase="boot" data-mode="idle">
@@ -32,7 +32,8 @@
     <p class="expand">JUST A RATHER VERY INTELLIGENT SYSTEM</p>
     <ol id="checks" class="checks"></ol>
     <p id="introGreet" class="intro-greet"></p>
-    <p class="skip">ANY KEY TO SKIP</p>
+    <button id="engage" class="engage" type="button" hidden><span>Engage</span></button>
+    <p id="skip" class="skip">Press any key to skip</p>
   </section>
 
   <main class="stage" aria-live="polite">
@@ -78,7 +79,7 @@
       <div class="g"><span id="roOptics" class="v">—</span><span class="l">optics</span></div>
       <div class="g"><span id="roMem" class="v">000</span><span class="l">frames</span></div>
       <div class="g"><span id="roItems" class="v">0</span><span class="l">items</span></div>
-      <div class="g"><span id="roAudio" class="v">off</span><span class="l">audio</span></div>
+      <button id="audioBtn" class="g g-btn" type="button" aria-pressed="false" title="Jarvis speaks on this laptop (V)"><span id="roAudio" class="v">off</span><span class="l">audio</span></button>
     </div>
   </footer>
 

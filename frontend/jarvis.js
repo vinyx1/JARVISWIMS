@@ -199,18 +199,29 @@ async function readouts() {
   $('link').hidden = opticsLive || !phoneUrl;
 }
 setInterval(readouts, 2500);
-function showAudio() { $('roAudio').textContent = laptopAudio ? 'on' : 'off'; $('roAudio').className = `v ${laptopAudio ? 'on' : ''}`; }
+function showAudio() {
+  $('roAudio').textContent = laptopAudio ? 'on' : 'off'; $('roAudio').className = `v ${laptopAudio ? 'on' : ''}`;
+  $('audioBtn').setAttribute('aria-pressed', String(laptopAudio));
+}
+function toggleAudio() {
+  laptopAudio = !laptopAudio;
+  try { localStorage.setItem('jarvisLaptopAudio', laptopAudio ? '1' : '0'); } catch {}
+  if (laptopAudio) speaker.unlock(); else speaker.stop();
+  showAudio(); toast(laptopAudio ? 'LAPTOP AUDIO ON' : 'LAPTOP AUDIO OFF');
+}
+$('audioBtn').onclick = e => { toggleAudio(); e.currentTarget.blur(); };   // blur: Space must stay "talk"
 showAudio();
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1700); }
 
-// ---------- intro ----------
-let booted = false;
+// ---------- intro: plays, then waits on Engage (a key or click fast-forwards to it) ----------
+let booted = false, introReady = false, fast = false;
+const wait = ms => fast ? Promise.resolve() : sleep(ms);
 async function intro() {
   $('title').replaceChildren(...'J.A.R.V.I.S.'.split('').map((ch, i) => { const s = el('span', null, ch); s.style.animationDelay = `${0.5 + i * 0.07}s`; return s; }));
   const t0 = performance.now(), BOOT_MS = 2600;
-  (function grow() { const k = (performance.now() - t0) / BOOT_MS; core.boot = booted ? 1 : k; if (k < 1 && !booted) requestAnimationFrame(grow); })();
-  core.state = 'thinking';
+  (function grow() { const k = (performance.now() - t0) / BOOT_MS; core.boot = booted || fast ? 1 : k; if (k < 1 && !booted && !fast) requestAnimationFrame(grow); })();
+  core.state = 'thinking'; core.readouts = false;
   const [health, latest, mine] = await Promise.all([
     fetch('/health', {cache: 'no-store'}).then(r => r.json()).catch(() => null),
     api.getLatest().catch(() => null), api.getMine().catch(() => []),
@@ -223,22 +234,25 @@ async function intro() {
     ['VISUAL MEMORY', `${health?.frames ?? 0} FRAMES`, true],
     ['REGISTERED ITEMS', `${mine.length}`, true],
   ];
-  await sleep(1300);
+  await wait(1300);
   for (const [name, value, ok] of checks) {
     if (booted) return;
     const li = el('li'); li.append(el('span', null, name), el('span', 'leader'), el('span', ok ? 'ok' : 'warn', value));
-    $('checks').append(li); await sleep(260);
+    if (fast) li.style.animationDuration = '0s';
+    $('checks').append(li); await wait(260);
   }
   if (booted) return;
-  await sleep(300);
+  await wait(300);
   $('introGreet').textContent = `${greetingFor()} All systems ${checks.every(c => c[2]) ? 'nominal' : 'standing by'}.`;
   $('introGreet').classList.add('on');
-  await sleep(1500);
-  finishIntro();
+  await wait(600);
+  introReady = true;
+  $('skip').hidden = true; $('engage').hidden = false; $('engage').focus();
 }
+$('engage').onclick = () => finishIntro();
 function finishIntro() {
   if (booted) return;
-  booted = true; core.boot = 1;
+  booted = true; core.boot = 1; core.readouts = true; $('engage').hidden = true;
   document.body.dataset.phase = 'ready'; setMode('idle'); showIdle(); void readouts();
 }
 
@@ -248,14 +262,17 @@ const typing = e => e.target instanceof HTMLInputElement;
 document.addEventListener('keyup', e => { if (e.code === 'Space' && !typing(e) && booted) { e.preventDefault(); void talk(false); } });
 window.addEventListener('blur', () => { if (mode === 'listening') void talk(false); });
 document.addEventListener('keydown', async e => {
-  if (!booted) { finishIntro(); return; }   // any key skips the intro
+  if (!booted) {   // intro: Enter/Space on Engage continues; any other key fast-forwards to it
+    if (introReady && (e.key === 'Enter' || e.code === 'Space')) { e.preventDefault(); finishIntro(); } else fast = true;
+    return;
+  }
   if (typing(e)) { if (e.key === 'Escape') { $('cmd').hidden = true; $('cmdInput').blur(); } return; }
   const plain = !e.repeat && !e.metaKey && !e.ctrlKey && !e.altKey;
   if (e.code === 'Space') { e.preventDefault(); if (plain) await talk(true); return; }
   if (!plain) return;
   const k = e.key.toLowerCase();
   if (k === 'enter') { e.preventDefault(); $('cmd').hidden = false; $('cmdInput').focus(); }
-  if (k === 'v') { laptopAudio = !laptopAudio; try { localStorage.setItem('jarvisLaptopAudio', laptopAudio ? '1' : '0'); } catch {} if (!laptopAudio) speaker.stop(); showAudio(); toast(laptopAudio ? 'LAPTOP AUDIO ON' : 'LAPTOP AUDIO OFF'); }
+  if (k === 'v') toggleAudio();
   if (k === 'q') $('qrOverlay').hidden = !$('qrOverlay').hidden;
   if (k === 'escape') $('qrOverlay').hidden = true;
   if (k === 'd') location.href = '/debug.html';
@@ -265,7 +282,7 @@ document.addEventListener('keydown', async e => {
     catch (err) { toast(err.status === 409 ? 'WAIT FOR THE QUESTION TO FINISH' : 'RESET FAILED'); }
   }
 });
-document.addEventListener('pointerdown', () => { if (!booted) finishIntro(); });
+document.addEventListener('pointerdown', e => { if (!booted && !introReady && e.target !== $('engage')) fast = true; });
 $('cmd').onsubmit = async e => {
   e.preventDefault();
   const q = $('cmdInput').value.trim(); if (!q) return;
