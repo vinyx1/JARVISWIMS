@@ -157,3 +157,15 @@ def test_a_still_is_used_once_and_only_while_fresh(monkeypatch, tmp_path):
     main._still.update(jpeg=b"old still", ts=_time.time() - 30)
     assert main._current_view(caption=False)["jpeg"] == b"preview"     # stale: ignored
     main._preview.update(jpeg=None, ts=0.0); main._still.update(jpeg=None, ts=0.0)
+
+
+def test_activity_follows_the_conversation(monkeypatch):
+    main._set_activity("idle")
+    monkeypatch.setattr(main, "_answer_request", AsyncMock(return_value={"answer": "x", "kind": "other", "frames": []}))
+    asyncio.run(main.ask(main.Ask(question="where is my helmet")))     # the real ask()
+    a = main.activity()
+    assert a["state"] == "answered" and a["question"] == "where is my helmet"
+    run_listen(monkeypatch, "Jarvis?", "wake")
+    assert main.activity()["state"] == "armed"
+    main._activity["ts"] -= 100
+    assert main.activity()["state"] == "idle"   # "armed" expires

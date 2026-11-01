@@ -271,6 +271,7 @@ document.addEventListener('keydown',async e=>{
   if((e.key==='m'||e.key==='M')&&plain)await toggleHandsFree();
   if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopAudio',laptopVoice?'1':'0');}catch{}
     if(laptopVoice)speaker.unlock();else speaker.stop();showVoiceChip();toast(laptopVoice?'LAPTOP AUDIO ON':'LAPTOP AUDIO OFF');}
+  if((e.key==='d'||e.key==='D')&&plain){location.href='/';return;}   // back to the hologram HUD
   if((e.key==='q'||e.key==='Q')&&plain){$('qrOverlay').hidden=!$('qrOverlay').hidden;void refreshPhoneLink();}
   if((e.key==='r'||e.key==='R')&&plain)await reset();
   if(e.key==='Escape'){$('evidence').hidden=true;$('qrOverlay').hidden=true;}

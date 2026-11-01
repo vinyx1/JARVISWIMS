@@ -6,89 +6,85 @@
   <meta name="color-scheme" content="dark">
   <title>J.A.R.V.I.S.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Orbitron:wght@500;700&family=Rajdhani:wght@500;600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="hud.css">
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@200;300;400&family=Saira:wght@300;400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="jarvis.css">
 </head>
-<body>
-  <!-- Laptop HUD on the projector: live feed, plus the COMMS side panel (chat, evidence, typed questions). -->
-  <header class="top">
-    <div class="brand"><span class="arc"></span>J.A.R.V.I.S.<span class="sub">MARK I · LOST &amp; FOUND PROTOCOL</span></div>
-    <div class="chips">
-      <span id="liveChip" class="chip live" hidden>● LIVE</span>
-      <span id="linkChip" class="chip">LINK ···</span>
-      <span id="frameChip" class="chip">FRAMES 0</span>
-      <span id="earChip" class="chip">MIC · HOLD SPACE</span>
-      <span id="micChip" class="chip">LAPTOP AUDIO OFF</span>
-    </div>
+<body data-phase="boot" data-mode="idle">
+  <!-- Hologram HUD for the projector. D switches to the debug view (debug.html). -->
+  <div class="atmos" aria-hidden="true"></div>
+
+  <header class="bar top">
+    <div class="ident"><span class="mark">J.A.R.V.I.S.</span><span class="sub">MK·V &nbsp;/&nbsp; LOST &amp; FOUND PROTOCOL</span></div>
+    <div class="readouts"><span id="roDate"></span><span id="roClock">--:--:--</span></div>
   </header>
 
-  <main class="hud">
-    <section class="feed" aria-label="Live view from the suit camera">
-      <div class="viewport">
-        <img id="live" alt="Latest frame from the phone" hidden>
-        <div id="idle" class="idle">
-          <div class="reticle"></div>
-          <p>AWAITING VISUAL FEED</p>
-          <img class="qr" data-qr alt="QR code: open the camera page on the iPhone" hidden>
-          <p class="hint" data-qr-hint>Scan with the iPhone camera, then press Start.</p>
-        </div>
-        <span class="bracket tl"></span><span class="bracket tr"></span>
-        <span class="bracket bl"></span><span class="bracket br"></span>
-        <div class="scanline"></div>
-        <div class="overlay-top">
-          <span id="room" class="tag room">ROOM —</span>
-          <span id="age" class="tag">—</span>
-        </div>
-        <div id="scanState" class="scan-state">SCANNING</div>
-        <div class="overlay-bottom">
-          <div id="scene" class="scene"></div>
-          <div id="objects" class="labels"></div>
+  <div class="reactor-wrap" aria-hidden="true"><canvas id="reactor"></canvas></div>
+
+  <section id="intro" class="intro" aria-live="polite">
+    <h1 id="title" class="title" aria-label="J.A.R.V.I.S."></h1>
+    <p class="expand">JUST A RATHER VERY INTELLIGENT SYSTEM</p>
+    <ol id="checks" class="checks"></ol>
+    <p id="introGreet" class="intro-greet"></p>
+    <p class="skip">ANY KEY TO SKIP</p>
+  </section>
+
+  <main class="stage" aria-live="polite">
+    <p id="status" class="status"><span class="dot"></span><span id="statusText">STANDING BY</span></p>
+
+    <div id="idlePanel" class="idle-panel">
+      <p id="greeting" class="greeting">Good evening, sir.</p>
+      <p class="hint">Say <em>“Jarvis, …”</em> on the phone, or hold <kbd>Space</kbd> here.</p>
+      <div id="link" class="link" hidden>
+        <img class="qr" data-qr alt="QR code: open the camera page on the iPhone">
+        <div>
+          <p class="micro">LINK THE SUIT CAMERA</p>
+          <p class="small">Scan with the iPhone camera, then tap Start.</p>
         </div>
       </div>
-    </section>
+    </div>
 
-    <section class="jarvis" aria-label="Jarvis">
-      <div class="panel-title">COMMS</div>
-      <div id="transcript" class="transcript" aria-live="polite">
-        <p class="line sys">Ask <b>"Jarvis, where did I leave my helmet?"</b>: hold <kbd>Space</kbd> and speak,
-          press <kbd>M</kbd> for hands-free, use the phone, or type below.<br>
-          <kbd>Q</kbd> phone QR · <kbd>V</kbd> laptop audio on/off · <kbd>R</kbd> clears memory.</p>
+    <div id="talk" class="talk" hidden>
+      <p class="micro">SIR</p>
+      <p id="query" class="query"></p>
+      <p class="micro jarvis-label">J.A.R.V.I.S.</p>
+      <p id="reply" class="reply"></p>
+    </div>
+
+    <figure id="evidence" class="evidence" hidden>
+      <div class="frame">
+        <img id="evImg" alt="">
+        <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
+        <span id="evTag" class="tag">LAST SEEN</span>
+        <span class="reticle" aria-hidden="true"></span>
       </div>
-      <div id="heard" class="heard"></div>
-
-      <div id="evidence" class="evidence" hidden>
-        <div id="evidenceTitle" class="panel-title">LAST SEEN</div>
-        <figure class="hero">
-          <div class="hero-media">
-            <img id="heroImg" alt="Where Jarvis last saw it">
-          </div>
-          <figcaption id="heroCap"></figcaption>
-        </figure>
-        <div id="candidates" class="candidate-options" aria-label="Possible object matches" hidden></div>
-        <div class="panel-title" id="trailTitle" hidden>ROUTE BACK</div>
-        <ol id="trail" class="trail"></ol>
-      </div>
-
-      <section class="my-items" aria-label="My registered items"><div class="panel-title">MY ITEMS</div><ul id="myItems"><li class="empty-item">No items registered yet.</li></ul><p id="mineStatus" class="mine-status" role="status" hidden></p></section>
-
-      <form id="askForm" class="ask">
-        <input id="q" placeholder="Type to Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
-        <button>SEND</button>
-      </form>
-    </section>
+      <figcaption id="evCap"></figcaption>
+      <div id="cands" class="cands"></div>
+      <ol id="route" class="route"></ol>
+    </figure>
   </main>
 
-  <!-- Q: the phone link as a big QR code, any time -->
+  <footer class="bar bottom">
+    <div class="keys"><kbd>Space</kbd> talk <kbd>M</kbd> hands-free <kbd>V</kbd> audio <kbd>⏎</kbd> type <kbd>Q</kbd> phone <kbd>D</kbd> debug <kbd>R</kbd> reset</div>
+    <div class="readouts">
+      <span id="roOptics">OPTICS —</span><span id="roMem">MEM 0</span><span id="roItems">ITEMS 0</span>
+      <span id="roMic">MIC · HOLD SPACE</span><span id="roAudio">AUDIO OFF</span>
+    </div>
+  </footer>
+
+  <form id="cmd" class="cmd" hidden>
+    <span aria-hidden="true">›</span>
+    <input id="cmdInput" placeholder="Ask Jarvis…" autocomplete="off" aria-label="Question for Jarvis">
+  </form>
+
   <div id="qrOverlay" class="qr-overlay" hidden>
     <div class="qr-card">
-      <div class="panel-title">CONNECT THE SUIT CAMERA</div>
-      <img class="qr" data-qr alt="QR code: open the camera page on the iPhone" hidden>
-      <p class="qr-url" data-qr-url>Waiting for the tunnel…</p>
-      <p class="hint">Scan with the iPhone camera · <kbd>Q</kbd> to close</p>
+      <p class="micro">LINK THE SUIT CAMERA</p>
+      <img class="qr big" data-qr alt="QR code: open the camera page on the iPhone">
+      <p class="small">Scan with the iPhone camera · <kbd>Q</kbd> to close</p>
     </div>
   </div>
 
   <div id="toast" class="toast" hidden></div>
-  <script type="module" src="app.js"></script>
+  <script type="module" src="jarvis.js"></script>
 </body>
 </html>

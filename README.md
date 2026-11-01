@@ -38,7 +38,14 @@ put them down, say **"Jarvis, I'm leaving my AirPods here"**: he saves the spot 
 Later, "where are my AirPods?" answers from that spot (or a newer sighting), however long ago.
 The HUD's MY ITEMS shows where each was last seen.
 
-HUD keys: **Space** talk · **M** hands-free · **Q** phone QR · **V** laptop audio on/off · **R** clear memory.
+**The HUD** (`localhost:8000`) opens with an intro (any key skips it), then shows Jarvis as a
+hologram core that reacts like Siri: amber when he hears "Jarvis", spinning up while he thinks,
+pulsing while he answers, with the photo of where he saw your item. **D** switches to the debug
+view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS) and back.
+The previous HUD is also saved as the git tag `ui-classic`.
+
+HUD keys: **Space** talk · **M** hands-free · **V** laptop audio on/off · **Enter** type a question ·
+**Q** phone QR · **D** debug view · **R** clear memory.
 
 **Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →
 Manage Voices → English (UK) → download **Daniel (Enhanced)**. Restart `./start`; Jarvis uses it

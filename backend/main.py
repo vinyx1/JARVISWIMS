@@ -288,6 +288,25 @@ async def _answer_request(body: Ask):
         return {"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}
 
 
+# ---------- what Jarvis is doing right now, for the HUD's animations (GET /activity) ----------
+# idle -> armed ("Jarvis" heard, waiting for the question) -> thinking (question in) -> answered.
+_activity: dict = {"id": 0, "state": "idle", "question": None, "ts": 0.0}
+ARMED_S, THINKING_S = 8, 30
+
+
+def _set_activity(state: str, question: str | None = None) -> None:
+    _activity.update(id=_activity["id"] + 1, state=state, question=question, ts=time.time())
+
+
+@app.get("/activity")
+def activity():
+    a = dict(_activity)
+    a["age"] = time.time() - a["ts"]
+    if (a["state"] == "armed" and a["age"] > ARMED_S) or (a["state"] == "thinking" and a["age"] > THINKING_S):
+        a["state"] = "idle"
+    return a
+
+
 # One active demo: retain only the latest completed exchange for the display HUD.
 _exchange = None
 _exchange_generation = 0
@@ -301,11 +320,13 @@ async def ask(body: Ask):
     with _interaction_lock:
         generation = _exchange_generation
         _ask_inflight += 1
+    _set_activity("thinking", body.question)
     try:
         result = await _answer_request(body)
         with _interaction_lock:
             if generation == _exchange_generation:
                 _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result}
+        _set_activity("answered", body.question)
         return result
     finally:
         with _interaction_lock:
@@ -368,8 +389,11 @@ async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: 
         return reply  # background chatter: ignore
     if not re.search(r"[a-z]{2}", question, re.I):
         reply["armed"] = woke  # "Jarvis" on its own: listen for the question next
+        if woke:
+            _set_activity("armed")
         return reply
     reply["question"] = question
+    _set_activity("thinking", question)
     if can_send_still is True and not hasattr(still, "read") and (place_item(question) or remember_item(question)):
         reply["need_still"] = True   # "remember this": get a sharp photo first
         return reply
@@ -442,7 +466,8 @@ async def speak(body: Speak):
 @app.get("/health")
 def health():
     """Is the AI actually working? `ai_ok` is false after a failed caption call (bad key, no network)."""
-    return {"ai_ok": ai.last_error is None, "ai_error": ai.last_error, "frames": len(store.read_log())}
+    return {"ai_ok": ai.last_error is None, "ai_error": ai.last_error, "frames": len(store.read_log()),
+            "speech_ready": stt._model is not None, "items": len(store.mine())}
 
 
 # ---------- phone link: scripts/demo.sh writes the tunnel URL here; the HUD shows it as a QR code ----------
@@ -520,6 +545,7 @@ def reset():
             raise HTTPException(status_code=409, detail="Wait for the active question before resetting memory.")
         _exchange_generation += 1
         _exchange = None
+        _set_activity("idle")
         store.reset()
         _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
         _still.update(jpeg=None, ts=0.0)
