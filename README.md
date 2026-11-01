@@ -45,10 +45,13 @@ pulsing while he answers, with the photo of where he saw your item. **D** switch
 view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS) and back.
 The previous HUD is also saved as the git tag `ui-classic`.
 
+**Walkthrough:** press **H** (or **How it works** on the HUD) for a six-step guided demo: scan the
+QR, look around, teach him your things, tell him where you put one, go about your day, ask. Each
+step ticks itself off when it really happens; ← → or Back/Next step through it by hand.
 Play with the core: hover to draw a constellation, click to drop linked nodes, drag to spin the
 rings, double-click to overcharge it.
 Laptop audio: click the **audio** gauge (bottom right), or press **V**.
-HUD keys: **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
+HUD keys: **H** walkthrough · **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
 **Q** phone QR · **D** debug view · **R** clear memory. Hands-free listening is on the phone.
 
 **Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →

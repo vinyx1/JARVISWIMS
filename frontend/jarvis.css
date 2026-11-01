@@ -192,3 +192,32 @@ body {
 @media (prefers-reduced-motion: reduce) {
   .atmos::after { animation: none; } .reactor-wrap { transition: none; }
 }
+
+/* ---------- the walkthrough ---------- */
+.guide-open { all: unset; cursor: pointer; margin-top: 26px; align-self: flex-start; display: inline-block; padding: 11px 26px 11px calc(26px + .3em);
+  font: 400 11px var(--hud); letter-spacing: .3em; color: #fff; border: 1px solid var(--cyan-2); background: rgba(95, 227, 255, .07);
+  clip-path: polygon(10px 0, 100% 0, 100% calc(100% - 10px), calc(100% - 10px) 100%, 0 100%, 0 10px); }
+.guide-open:hover, .guide-open:focus-visible { background: rgba(95, 227, 255, .18); }
+.guide { display: grid; gap: 18px; animation: rise .6s var(--ease); }
+.guide-count { margin-left: 10px; color: var(--muted); letter-spacing: .1em; }
+.guide-rail { list-style: none; margin: 0; padding: 0; display: flex; gap: 6px; }
+.guide-rail li { flex: 1; height: 3px; background: rgba(95, 227, 255, .16); position: relative; cursor: pointer; }
+.guide-rail li.done { background: var(--cyan); box-shadow: 0 0 8px rgba(95, 227, 255, .5); }
+.guide-rail li.current { background: var(--amber); box-shadow: 0 0 10px rgba(255, 176, 64, .6); }
+.guide-step { display: grid; gap: 10px; min-height: 0; }
+.guide-title { margin: 0; font: 300 clamp(30px, min(3vw, 5vh), 48px)/1.1 var(--body); color: #fff; }
+.guide-body { margin: 0; max-width: 34em; font: 300 clamp(17px, min(1.4vw, 2.4vh), 21px)/1.45 var(--body); color: var(--text); }
+.guide-say { margin: 4px 0 0; padding: 10px 14px; border-left: 2px solid var(--amber); background: rgba(255, 176, 64, .06);
+  font: 400 clamp(17px, min(1.4vw, 2.4vh), 21px)/1.35 var(--body); color: #fff; max-width: 30em; }
+.guide-step .qr { width: min(150px, 18vh); height: min(150px, 18vh); margin-top: 6px; }
+.guide-status { margin: 4px 0 0; display: flex; align-items: center; gap: 10px; font: 400 11px var(--hud); letter-spacing: .14em; color: var(--muted); text-transform: uppercase; }
+.guide-status::before { content: ""; width: 8px; height: 8px; border: 1px solid var(--cyan-2); }
+.guide-status.waiting::before { animation: blink .9s steps(2) infinite; background: rgba(95, 227, 255, .3); }
+.guide-status.done { color: var(--cyan); }
+.guide-status.done::before { background: var(--cyan); box-shadow: 0 0 10px var(--cyan); }
+.guide-nav { display: flex; gap: 10px; }
+.guide-nav button { all: unset; cursor: pointer; padding: 8px 16px; font: 400 10px var(--hud); letter-spacing: .2em; color: var(--text);
+  border: 1px solid rgba(95, 227, 255, .3); }
+.guide-nav button:hover, .guide-nav button:focus-visible { border-color: var(--cyan); color: #fff; }
+.guide-nav button.ghost { border-color: transparent; color: var(--muted); }
+.guide-nav button:disabled { opacity: .3; cursor: default; }
