@@ -172,7 +172,7 @@ async def _place(item: str) -> dict:
 # Sharp full-resolution photo the phone sends with what sir says (POST /listen's `still`, or
 # POST /still before a typed question). "Remember this" uses it instead of the small preview.
 _still: dict = {"jpeg": None, "ts": 0.0}
-STILL_MAX_AGE_S = 15
+STILL_MAX_AGE_S = 5   # a still belongs to the request it came with: older ones are stale
 
 
 def _current_view(caption: bool = True) -> dict | None:
@@ -182,6 +182,8 @@ def _current_view(caption: bool = True) -> dict | None:
     fresh_preview = _preview["jpeg"] and time.time() - _preview["ts"] <= 3
     if fresh_still or fresh_preview:
         jpeg = _still["jpeg"] if fresh_still else _preview["jpeg"]
+        if fresh_still:
+            _still.update(jpeg=None, ts=0.0)   # used once: never reused by a later request
         session_id = store.session()
         entry = store.add_frame(jpeg, time.time() * 1000)
         if caption:
@@ -203,13 +205,24 @@ async def _study_and_register(item: str, jpeg: bytes, frame: dict) -> str:
 
 
 async def _remember(item: str) -> dict:
-    frame = _current_view()
+    frame = _current_view(caption=False)
     if not frame:
         return {"answer": "I can't see anything yet, sir. Start the camera and show it to me.",
                 "kind": "other", "frames": []}
     jpeg = (store.FRAMES / f"{frame['id']}.jpg").read_bytes()
-    description = await _study_and_register(item, jpeg, frame)
-    store.mark_seen(item, frame["id"], "where sir registered it")
+    # Study the item and caption the photo at the same time (no extra wait), so its last-seen
+    # spot is a real place straight away ("on desk by the window"), not a placeholder.
+    session_id = store.session()
+    caption_job = asyncio.wait_for(asyncio.to_thread(ai.caption_frame, jpeg, store.mine()), timeout=15)
+    description, caption = await asyncio.gather(_study_and_register(item, jpeg, frame), caption_job,
+                                                return_exceptions=True)
+    if isinstance(description, BaseException):
+        description = item
+    if isinstance(caption, BaseException):
+        caption = dict(ai.UNCLEAR)
+    store.set_caption(frame["id"], caption, session_id)
+    store.mark_seen(item, frame["id"], _where_from_caption(item, caption),
+                    caption.get("room_guess", ""), caption.get("landmarks") or [])
     said = f"Noted, sir. I'll remember your {item}" + (f": {description}." if description != item else ".")
     return {"answer": said, "kind": "remember",
             "frames": [{"id": frame["id"], "url": frame["url"], "ts": frame["ts"], "note": description}]}
@@ -290,13 +303,17 @@ async def still(image: UploadFile = File(...)):
 
 
 @app.post("/listen")
-async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: UploadFile | None = File(None)):
+async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: UploadFile | None = File(None),
+                 can_send_still: bool = Form(False)):
     """One spoken utterance (16 kHz WAV from frontend/mic.js) -> what was heard, and Jarvis's answer.
 
     mode "ask":  everything said is the question (push-to-talk, or right after "Jarvis" alone).
     mode "wake": hands-free; act only if "Jarvis" was said. "Jarvis" alone -> armed: the next
                  utterance (sent with mode "ask") is the question.
-    Reply: {"heard", "question", "armed", "result"}; result is the /ask reply, or null.
+    Reply: {"heard", "question", "armed", "result", "need_still"}; result is the /ask reply, or null.
+    can_send_still: the sender has a camera. Then "this is my X" / "I'm leaving my X here" come
+    back with need_still: true and no result: the sender takes a sharp photo, POSTs it to /still
+    and asks the question via /ask. Everything else needs no photo, so none is uploaded.
     """
     data = await audio.read()
     if hasattr(still, "read"):  # optional upload (absent: None, or FastAPI's default marker)
@@ -309,13 +326,16 @@ async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: 
         log.exception("transcription failed")
         raise HTTPException(status_code=503, detail="Speech recognition is unavailable.")
     woke, question = split_wake(heard)
-    reply = {"heard": heard, "question": None, "armed": False, "result": None}
+    reply = {"heard": heard, "question": None, "armed": False, "result": None, "need_still": False}
     if mode == "wake" and not woke:
         return reply  # background chatter: ignore
     if not re.search(r"[a-z]{2}", question, re.I):
         reply["armed"] = woke  # "Jarvis" on its own: listen for the question next
         return reply
     reply["question"] = question
+    if can_send_still is True and not hasattr(still, "read") and (place_item(question) or remember_item(question)):
+        reply["need_still"] = True   # "remember this": get a sharp photo first
+        return reply
     reply["result"] = await ask(Ask(question=question))
     return reply
 

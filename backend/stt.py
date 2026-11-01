@@ -41,7 +41,11 @@ def _load():
 
 
 def warm_up() -> None:
-    """Load the model now (in a thread) so the first question isn't slow."""
+    """Load the model now (in a thread) so the first question isn't slow.
+    JARVIS_STT_WARMUP=0 skips it (CI, tests): the model then loads on first use."""
+    if os.getenv("JARVIS_STT_WARMUP", "1") == "0":
+        return
+
     def run():
         try:
             _load()

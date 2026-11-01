@@ -19,6 +19,8 @@ jobs:
       # Repo secret. Without it the AI calls fail, and Kenny's and Paul's code
       # must fall back safely, so the contract is still checked.
       ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      # The smoke test never speaks, so don't download Whisper's ~480 MB model.
+      JARVIS_STT_WARMUP: "0"
     steps:
       - uses: actions/checkout@v4
 

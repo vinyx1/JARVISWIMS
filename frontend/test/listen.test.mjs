@@ -55,3 +55,15 @@ test('one exchange at a time; cancel drops the reply in flight', async () => {
   assert.deepEqual(spoken, []);
   assert.equal(convo.busy, false);
 });
+
+test('"this is my X" from a camera device: take a photo, then answer from it', async () => {
+  const photoAsks = [], spoken = [];
+  const convo = createConversation({
+    listen: async () => ({heard: 'Jarvis, this is my mug, remember it', question: 'this is my mug, remember it', armed: false, result: null, need_still: true}),
+    askWithPhoto: async q => { photoAsks.push(q); return {answer: 'Noted, sir.', kind: 'remember', frames: []}; },
+    mic: {pause() {}, async resume() {}}, speak: async t => { spoken.push(t); },
+  });
+  await convo.handle(new Uint8Array(), {manual: false});
+  assert.deepEqual(photoAsks, ['this is my mug, remember it']);
+  assert.deepEqual(spoken, ['Noted, sir.']);
+});

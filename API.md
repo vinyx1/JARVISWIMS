@@ -83,14 +83,17 @@ Voice input. The browser records one utterance (`frontend/mic.js`) and sends it 
 - `wake`: hands-free; act only if "Jarvis" was said ("Hey Jarvis, where's my helmet?",
   "Where are my keys, Jarvis?"). Anything else is ignored.
 
-Optional `still`: a sharp full-resolution JPEG of what the camera sees as sir speaks. The phone
-sends it whenever its camera is on; "this is my X, remember it" uses it to study the item.
+Optional `can_send_still=true`: the sender has a camera. Then "this is my X, remember it" and
+"I'm leaving my X here" come back with `need_still: true` and `result: null`: the sender takes a
+sharp photo, POSTs it to `/still`, and asks the same `question` via `/ask`. Nothing else asks for
+a photo, so ordinary speech uploads audio only. (A `still` file sent with `/listen` is also accepted.)
+A still is used once, and only within 5 s of arriving.
 
 The backend transcribes it locally with Whisper (`backend/stt.py`, no API key) and, if there
 is a question, answers it exactly like `/ask` (so it also shows on the HUD via `/interaction`).
 ```json
 { "heard": "Hey Jarvis, where's my helmet?", "question": "where's my helmet",
-  "armed": false, "result": { "answer": "…", "kind": "find", "frames": [] } }
+  "armed": false, "need_still": false, "result": { "answer": "…", "kind": "find", "frames": [] } }
 ```
 `armed: true` means "Jarvis" was said with nothing after it: send the next utterance with
 `mode=ask`. `result` is `null` when there was nothing to answer. `400` for a bad WAV, `503`

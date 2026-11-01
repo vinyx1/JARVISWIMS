@@ -25,6 +25,7 @@ $('phoneStart').onclick=async()=>{
   const devices=await listCameras();if(token!==generation)return;
   $('phoneDevice').replaceChildren();for(const [i,device] of devices.entries()){const option=document.createElement('option');option.value=device.deviceId;option.textContent=device.label||`Camera ${i+1}`;$('phoneDevice').append(option);}if(selected)$('phoneDevice').value=selected;
   loop.start();preview.start();status('Capturing. Keep this page in the foreground.');
+  void startHandsFree();   // now ask for the mic (camera permission is settled)
   if(navigator.wakeLock?.request){navigator.wakeLock.request('screen').then(lock=>{if(token===generation&&loop.running)wakeLock=lock;else void lock.release();}).catch(()=>{});}
  }catch(error){if(token===generation){camera.stop();status(error.name==='NotAllowedError'?'Camera permission denied. Allow access and retry.':error.message,true);}}
  finally{if(token===generation){opening=false;controls();}}
@@ -91,7 +92,10 @@ async function sharpStill(){
   try{return (await captureFrame(video,{width:1920,quality:.88}))?.blob||null;}catch{return null;}
 }
 const convo=createConversation({
-  listen:async(wav,mode)=>voiceApi.listen(wav,mode,await sharpStill()), mic, speak:speakHere,
+  // Audio only; a photo is sent only when the laptop asks for one ("this is my X, remember it").
+  listen:(wav,mode)=>voiceApi.listen(wav,mode,!!camera.stream),
+  async askWithPhoto(question){const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});return voiceApi.askQuestion(question);},
+  mic, speak:speakHere,
   onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
   onHeard:text=>{$('phoneHeard').textContent=`You: ${text}`;},
   onAnswer:(result,question)=>{askedHere.set(question,Date.now());showAnswer(result);},
@@ -106,7 +110,13 @@ async function startHandsFree(){
   try{await mic.start();}catch{/* onState already explained (e.g. denied) */}
 }
 // Every tap also re-unlocks audio, so a later reply can play by itself.
-document.addEventListener('pointerdown',()=>{speaker.unlock();void startHandsFree();},{capture:true});
+// Start capture is special: asking for the camera and the mic at the same moment can confuse
+// iOS Safari, so that tap only unlocks audio, and the mic is requested once the camera is on.
+document.addEventListener('pointerdown',e=>{
+  speaker.unlock();
+  if(e.target?.closest?.('#phoneStart')){if(handsFree())mic.prime();return;}
+  void startHandsFree();
+},{capture:true});
 $('phoneHandsFree').onchange=async()=>{
   speaker.unlock();
   if(handsFree()){mic.auto=true;if(mic.on)await mic.resume();else await startHandsFree();say(idle());}

@@ -73,3 +73,33 @@ test('releasing push-to-talk before the mic opened reports not-ready and sends n
   assert.equal(mic.hold(false), 'not-ready');   // a second release is harmless
   assert.deepEqual(sent, []);
 });
+
+function fakeAudio() {
+  const counts = {opens: 0, processors: 0};
+  window.AudioContext = class { constructor() { this.state = 'running'; this.sampleRate = 48000; this.destination = {}; }
+    resume() { return Promise.resolve(); } createMediaStreamSource() { return {connect() {}, disconnect() {}}; }
+    createScriptProcessor() { counts.processors++; return {connect() {}, disconnect() {}}; } createGain() { return {gain: {}, connect() {}}; } };
+  const media = () => ({getUserMedia: async () => { counts.opens++; await new Promise(r => setTimeout(r, 20)); return {getTracks: () => [{stop() {}}]}; }});
+  return {counts, media};
+}
+globalThis.window ??= {};
+
+test('two handlers starting the mic on the same tap open it once (no doubled audio)', async () => {
+  const {createMic} = await import('../mic.js');
+  const {counts, media} = fakeAudio();
+  const mic = createMic({onUtterance() {}, media});
+  mic.auto = true; const a = mic.start();                    // hands-free, from the page-level tap
+  mic.hold(true); const b = mic.on ? mic.resume() : mic.start();   // hold-to-talk, same tap
+  await Promise.all([a, b]);
+  assert.deepEqual(counts, {opens: 1, processors: 1});
+});
+
+test('holding to talk shows "recording", even when the mic was already on', async () => {
+  const {createMic} = await import('../mic.js');
+  const {media} = fakeAudio();
+  const states = [];
+  const mic = createMic({onUtterance() {}, media, onState: s => states.push(s)});
+  await mic.start();
+  mic.hold(true); await mic.resume();
+  assert.equal(states.at(-1), 'recording');
+});

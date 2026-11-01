@@ -4,6 +4,8 @@
 export const ARMED_MS = 8000;   // after "Jarvis" on its own, the next sentence is the question
 
 /**
+ * askWithPhoto(question): optional; when the reply says need_still ("this is my X, remember it"),
+ * take a sharp photo, send it, ask the question and return the /ask result.
  * @param {{listen: (wav: Uint8Array, mode: 'ask'|'wake') => Promise<any>,
  *          mic: {pause(): void, resume(): Promise<void>},
  *          speak: (text: string) => Promise<void>,
@@ -11,7 +13,7 @@ export const ARMED_MS = 8000;   // after "Jarvis" on its own, the next sentence 
  *          onAnswer?: (result: any, question: string) => void, onError?: (e: Error) => void,
  *          now?: () => number}} opts
  */
-export function createConversation({listen, mic, speak, onState = () => {}, onHeard = () => {}, onAnswer = () => {}, onError = () => {}, now = () => Date.now()}) {
+export function createConversation({listen, askWithPhoto = null, mic, speak, onState = () => {}, onHeard = () => {}, onAnswer = () => {}, onError = () => {}, now = () => Date.now()}) {
   let busy = false, armedUntil = 0, generation = 0;
 
   async function handle(wav, {manual}) {
@@ -25,11 +27,17 @@ export function createConversation({listen, mic, speak, onState = () => {}, onHe
       if (reply.heard) onHeard(reply.heard);
       if (reply.armed) { armedUntil = now() + ARMED_MS; onState('armed'); return; }
       armedUntil = 0;
-      if (!reply.result) { onState(manual ? 'not-heard' : 'listening'); return; }
+      let result = reply.result;
+      if (!result && reply.need_still && reply.question && askWithPhoto) {
+        onState('thinking');
+        result = await askWithPhoto(reply.question);
+        if (token !== generation) return;
+      }
+      if (!result) { onState(manual ? 'not-heard' : 'listening'); return; }
       onState('thinking');
-      onAnswer(reply.result, reply.question);
+      onAnswer(result, reply.question);
       mic.pause(); onState('speaking');
-      try { await speak(reply.result.answer); } finally { if (token === generation) await mic.resume(); }
+      try { await speak(result.answer); } finally { if (token === generation) await mic.resume(); }
       if (token === generation) onState('listening');
     } catch (error) {
       if (token === generation) { onError(error); onState('error'); }

@@ -33,11 +33,11 @@ class Upload:
         return self.data
 
 
-def run_listen(monkeypatch, heard, mode):
+def run_listen(monkeypatch, heard, mode, **extra):
     monkeypatch.setattr(stt, "transcribe", lambda data: heard)
     asked = AsyncMock(return_value={"answer": "On the chair, sir.", "kind": "find", "frames": []})
     monkeypatch.setattr(main, "ask", asked)
-    return asyncio.run(main.listen(audio=Upload(), mode=mode)), asked
+    return asyncio.run(main.listen(audio=Upload(), mode=mode, **extra)), asked
 
 
 def test_wake_mode_answers_after_jarvis(monkeypatch):
@@ -49,7 +49,7 @@ def test_wake_mode_answers_after_jarvis(monkeypatch):
 
 def test_wake_mode_ignores_chatter(monkeypatch):
     reply, asked = run_listen(monkeypatch, "great costume by the way", "wake")
-    assert reply == {"heard": "great costume by the way", "question": None, "armed": False, "result": None}
+    assert reply == {"heard": "great costume by the way", "question": None, "armed": False, "result": None, "need_still": False}
     asked.assert_not_awaited()
 
 
@@ -127,3 +127,33 @@ def test_where_from_caption_prefers_the_my_tag_then_the_item_then_the_scene():
 ])
 def test_remember_item_singular_and_plural(text, item):
     assert main.remember_item(text) == item
+
+
+def test_remember_from_a_camera_device_asks_for_a_photo_first(monkeypatch):
+    reply, asked = run_listen(monkeypatch, "Jarvis, this is my mug, remember it", "wake", can_send_still=True)
+    assert reply["need_still"] is True and reply["result"] is None
+    assert reply["question"] == "this is my mug, remember it"
+    asked.assert_not_awaited()
+
+
+def test_ordinary_questions_never_ask_for_a_photo(monkeypatch):
+    reply, asked = run_listen(monkeypatch, "Jarvis, where is my mug?", "wake", can_send_still=True)
+    assert reply["need_still"] is False and reply["result"] is not None
+
+
+def test_devices_without_a_camera_register_straight_away(monkeypatch):
+    reply, asked = run_listen(monkeypatch, "Jarvis, this is my mug, remember it", "wake")
+    assert reply["need_still"] is False
+    asked.assert_awaited_once()
+
+
+def test_a_still_is_used_once_and_only_while_fresh(monkeypatch, tmp_path):
+    import time as _time
+    monkeypatch.setattr(main.store, "add_frame", lambda jpeg, ts: {"id": "f_000001", "jpeg": jpeg})
+    main._preview.update(jpeg=b"preview", ts=_time.time())
+    main._still.update(jpeg=b"still", ts=_time.time())
+    assert main._current_view(caption=False)["jpeg"] == b"still"
+    assert main._current_view(caption=False)["jpeg"] == b"preview"     # consumed: not reused
+    main._still.update(jpeg=b"old still", ts=_time.time() - 30)
+    assert main._current_view(caption=False)["jpeg"] == b"preview"     # stale: ignored
+    main._preview.update(jpeg=None, ts=0.0); main._still.update(jpeg=None, ts=0.0)

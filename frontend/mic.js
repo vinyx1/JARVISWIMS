@@ -81,6 +81,15 @@ export function createVad({preRollMs = 400, startMs = 120, endSilenceMs = 800, m
 export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, media = () => navigator.mediaDevices}) {
   let ctx = null, stream = null, source = null, node = null, vad = createVad();
   let held = false, heldChunks = [], paused = false, auto = false, wanted = false;
+  let opening = null;   // the getUserMedia in progress: every caller waits for this one
+
+  // Open the microphone exactly once, however many taps/handlers ask at the same moment.
+  // (Two opens meant two audio pipelines writing into one recording: garbled audio.)
+  function ensureOpen() {
+    if (stream) return Promise.resolve();
+    opening ??= open().finally(() => { opening = null; });
+    return opening;
+  }
 
   function frame(input) {
     const pcm = downsample(input, ctx.sampleRate);
@@ -113,6 +122,7 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
     source.connect(node); node.connect(sink); sink.connect(ctx.destination);
   }
   function close() {
+    if (node) node.onaudioprocess = null;
     try { source?.disconnect(); node?.disconnect(); } catch {}
     stream?.getTracks().forEach(t => t.stop());
     stream = source = node = null;
@@ -127,9 +137,11 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
       wakeAudio();   // first, while we're still inside the tap/keypress
       if (wanted && stream) return;
       wanted = true; paused = false; vad.reset();
-      try { await open(); onState(held ? 'recording' : 'listening'); }
+      try { await ensureOpen(); onState(held ? 'recording' : 'listening'); }
       catch (e) { wanted = false; close(); onState(e?.name === 'NotAllowedError' ? 'denied' : 'error'); throw e; }
     },
+    /** Unlock audio inside a tap without asking for the mic yet (start() can follow later). */
+    prime() { try { wakeAudio(); } catch {} },
     stop() { wanted = false; held = false; heldChunks = []; close(); vad.reset(); onState('off'); onLevel(0); },
     /** True once the microphone is open and audio is flowing. */
     get ready() { return !!stream && ctx?.state === 'running'; },
@@ -152,9 +164,9 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
     pause() { paused = true; held = false; heldChunks = []; vad.reset(); onLevel(0); },
     async resume() {
       if (!wanted) return;
-      paused = false; vad.reset();
-      if (!stream) { try { await open(); } catch { wanted = false; onState('error'); return; } }
-      onState('listening');
+      paused = false; if (!held) vad.reset();
+      if (!stream) { try { await ensureOpen(); } catch { wanted = false; onState('error'); return; } }
+      onState(held ? 'recording' : 'listening');   // holding to talk: keep showing "recording"
     },
   };
 }

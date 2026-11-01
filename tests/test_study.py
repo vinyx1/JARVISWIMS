@@ -61,3 +61,10 @@ def test_marks_about_surroundings_are_dropped(monkeypatch):
     monkeypatch.setattr(ai, "_client_", lambda: fake)
     monkeypatch.delenv("ECHO_STUB_AI", raising=False)
     assert ai.study_item(_jpeg(), "airpods")["marks"] == ["scratch on lid"]
+
+
+def test_whisper_warm_up_can_be_skipped(monkeypatch):
+    import stt
+    monkeypatch.setenv("JARVIS_STT_WARMUP", "0")
+    monkeypatch.setattr(stt, "_load", lambda: (_ for _ in ()).throw(AssertionError("should not load")))
+    stt.warm_up()
