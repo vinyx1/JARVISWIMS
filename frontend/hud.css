@@ -62,13 +62,13 @@ body {
 [hidden] { display: none !important; }
 
 /* ---------- Jarvis panel ---------- */
-.jarvis { display: flex; flex-direction: column; gap: 12px; min-height: 0; border: 1px solid var(--line); background: var(--panel); padding: 16px; }
+.jarvis { display: flex; flex-direction: column; gap: 12px; min-height: 0; overflow: hidden; border: 1px solid var(--line); background: var(--panel); padding: 16px; }
 .panel-title { font-family: var(--hud-font); font-size: 11px; letter-spacing: .35em; color: var(--muted); }
-.transcript { flex: 1; overflow-y: auto; min-height: 170px; }
+.transcript { flex: 1 1 150px; overflow-y: auto; min-height: 110px; }
 .line { margin: 0 0 12px; line-height: 1.35; }
 .line b { font-family: var(--hud-font); font-size: 11px; letter-spacing: .2em; margin-right: 8px; }
 .line.you b { color: var(--muted); }
-.line.jarvis { font-size: 22px; }
+.line.jarvis { font-size: 19px; }
 .line.jarvis b { color: var(--cyan); }
 .line.pending { color: var(--muted); animation: blink 1s steps(2) infinite; }
 .line.sys { color: var(--muted); font-size: 16px; }
@@ -83,7 +83,7 @@ kbd { font-family: var(--hud-font); font-size: 11px; border: 1px solid var(--lin
 .trail li { flex: 0 0 auto; width: 96px; font-size: 12px; color: var(--muted); }
 .trail img { width: 96px; height: 64px; object-fit: cover; border: 1px solid var(--cyan-dim); display: block; margin-bottom: 4px; }
 
-.ask { display: flex; gap: 8px; }
+.ask { display: flex; gap: 8px; flex-shrink: 0; }
 .ask input { flex: 1; background: rgba(0,0,0,.4); border: 1px solid var(--line); color: var(--text); font: inherit; padding: 8px 10px; }
 .ask input:focus { outline: none; border-color: var(--cyan); }
 .ask button { font-family: var(--hud-font); font-size: 11px; letter-spacing: .2em; background: transparent; color: var(--cyan); border: 1px solid var(--cyan); padding: 0 14px; cursor: pointer; }
@@ -129,10 +129,10 @@ body.thinking .arc { animation-duration: .6s; }
 .hero-media { position: relative; }
 
 /* Round 2: registration and explicit choices for similar-looking items. */
-.evidence { flex-shrink: 0; max-height: 64vh; overflow-y: auto; }
+.evidence { flex-shrink: 1; min-height: 120px; max-height: 31vh; overflow-y: auto; }
 .hero { flex-shrink: 0; }
 .registered { color: var(--gold); }
-.my-items { border-top: 1px solid var(--line); padding-top: 10px; }
+.my-items { flex-shrink: 0; border-top: 1px solid var(--line); padding-top: 10px; }
 .my-items ul { list-style: none; padding: 0; margin: 7px 0 0; max-height: 90px; overflow-y: auto; }
 .my-items li { font-size: 13px; line-height: 1.4; margin: 5px 0; }
 .my-items li strong { color: var(--gold); margin-right: 8px; text-transform: uppercase; }
@@ -157,3 +157,6 @@ body.thinking .arc { animation-duration: .6s; }
 
 /* laptop mic chip */
 #earChip.hot { color: #111; background: var(--gold); border-color: var(--gold); }
+
+/* MY ITEMS: where each was last seen */
+#myItems .last-seen { display: block; color: var(--gold); font-size: 13px; margin-top: 2px; }

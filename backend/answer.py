@@ -108,9 +108,13 @@ def _format_log(entries: list[dict], now_ms: float) -> str:
     return "\n".join(lines)
 
 
-def _resolve_frames(refs: list[FrameRef], entries: list[dict]) -> list[dict]:
-    """Keep only ids that exist in the log, in the model's order, with url/ts from the log."""
-    by_id = {e["id"]: e for e in entries}
+def _resolve_frames(refs: list[FrameRef], entries: list[dict], mine=()) -> list[dict]:
+    """Keep only ids that exist in the log (or a registered item's last-seen record), in the
+    model's order, with url/ts from there."""
+    by_id = {s["frame_id"]: {"url": s["url"], "ts": s["ts"]}
+             for m in mine or () if isinstance(m, dict)
+             for s in [m.get("last_seen")] if isinstance(s, dict) and s.get("frame_id") and s.get("url")}
+    by_id.update({e["id"]: e for e in entries})
     return [
         {"id": r.id, "url": by_id[r.id]["url"], "ts": by_id[r.id]["ts"], "note": r.note}
         for r in refs
@@ -118,18 +122,31 @@ def _resolve_frames(refs: list[FrameRef], entries: list[dict]) -> list[dict]:
     ]
 
 
-def _format_mine(mine) -> str:
-    lines = [f"- MY {m['item']}: {m.get('description') or m['item']}"
-             for m in mine or () if isinstance(m, dict) and m.get("item")]
+def _format_mine(mine, now_ms: float | None = None) -> str:
+    """Sir's registered items, each with its last-seen record (which never expires)."""
+    now_ms = now_ms if now_ms is not None else time.time() * 1000
+    lines = []
+    for m in mine or ():
+        if not isinstance(m, dict) or not m.get("item"):
+            continue
+        line = f"- MY {m['item']}: {m.get('description') or m['item']}"
+        seen = m.get("last_seen")
+        if isinstance(seen, dict) and seen.get("frame_id"):
+            near = ", near " + ", ".join(seen["landmarks"]) if seen.get("landmarks") else ""
+            room = f" ({seen['room']})" if seen.get("room") and seen["room"] != "unknown" else ""
+            line += (f". Last seen: {seen.get('where') or 'unknown spot'}{room}{near}, "
+                     f"{_ago(now_ms - seen['ts'])}, frame {seen['frame_id']}")
+        lines.append(line)
     if not lines:
         return ""
-    return "Sir's registered items (captions tag them as MY <item>):\n" + "\n".join(lines) + "\n\n"
+    return ("Sir's registered items (captions tag them as MY <item>). Each last-seen record is "
+            "kept even when its frame is older than the log below:\n" + "\n".join(lines) + "\n\n")
 
 
 def _ask_model(question: str, entries: list[dict], now_ms: float, mine=()) -> AnswerOut | None:
     """Return the model's validated reply, or None on refusal. Raises on API/parse errors."""
     user_text = (
-        f"{_format_mine(mine)}"
+        f"{_format_mine(mine, now_ms)}"
         f"Caption log, oldest first ({len(entries)} frames):\n"
         f"{_format_log(entries, now_ms)}\n\n"
         f"Question: {question}"
@@ -173,7 +190,7 @@ def answer(question: str, log: list[dict], mine: list[dict] = ()) -> dict:
     `mine` is store.mine(): sir's registered items, [{item, description, ...}].
     """
     entries = log[-MAX_LOG_ENTRIES:]
-    if not entries:
+    if not entries and not any(isinstance(m, dict) and m.get("last_seen") for m in mine or ()):
         return {**EMPTY_LOG_REPLY, "frames": []}
     now_ms = time.time() * 1000
     try:
@@ -183,4 +200,4 @@ def answer(question: str, log: list[dict], mine: list[dict] = ()) -> dict:
         out = None
     if out is None:
         return _keyword_fallback(question, entries, now_ms)
-    return {"answer": out.answer, "kind": out.kind, "frames": _resolve_frames(out.frames, entries)}
+    return {"answer": out.answer, "kind": out.kind, "frames": _resolve_frames(out.frames, entries, mine)}

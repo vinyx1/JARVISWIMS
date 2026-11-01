@@ -19,14 +19,16 @@ Fill in the fields:
   - Being carried or held by the camera wearer: "red Iron Man helmet in hand".
   The "on ..." vs "in hand" part matters: it tells Jarvis where the item was left.
   Always include the plain noun so it can be found by name: helmet, jacket, bag, backpack,
-  bottle, phone, keys, laptop, monitor, TV, tablet, headphones, mask. Use the right noun:
+  bottle, phone, keys, wallet, earbuds (AirPods: a small white case), laptop, monitor, TV,
+  tablet, headphones, mask. Use the right noun:
   a laptop has a keyboard attached, a monitor is a standalone screen on a stand, a TV is a
   large screen on a wall or cart. Never call a monitor a laptop.
   Rooms are full of look-alikes, so add ONE detail that tells this one apart: brand or logo,
   stickers, size, what's on its screen, or what it sits next to ("by the window", "next to
   the pizza boxes"). Prefer details someone could say out loud.
-  Always list helmets, jackets, bags, bottles, phones, keys, laptops and monitors if you see
-  them, even when small or partly hidden. Leave out people, clothing people are wearing, and
+  Always list helmets, jackets, bags, bottles, phones, keys, wallets, earbuds/AirPods,
+  laptops and monitors if you see them, even when small or partly hidden: small things are
+  the easiest to lose. Leave out people, clothing people are wearing, and
   furniture or fixtures (chairs, stools, tables, trash cans, bins and machines are places or
   landmarks, not objects).
 - MY items: the request may list sir's registered items, each with a description and often a

@@ -101,7 +101,10 @@ function say(who, text) {
 
 function renderMine() {
   $('myItems').replaceChildren(...rememberedItems.map(item => {
-    const row = el('li'); row.append(el('strong', null, item.item), el('span', null, item.description)); return row;
+    const row = el('li'); row.append(el('strong', null, item.item), el('span', null, item.description));
+    const seen = item.last_seen;
+    if (seen?.where) row.append(el('small', 'last-seen', `📍 ${seen.where}${seen.landmarks?.[0] && !seen.where.includes(seen.landmarks[0]) ? `, near ${seen.landmarks[0]}` : ''} · ${formatSeenAt(seen.ts)}`));
+    return row;
   }));
   if (!rememberedItems.length) $('myItems').append(el('li', 'empty-item', 'No items registered yet.'));
 }
@@ -298,3 +301,4 @@ window.addEventListener('pageshow', event => { if (event.persisted) { poller.sta
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1600); }
 
 poller.start(); startPreview(); interactions.start(); void refreshMine();
+setInterval(() => { if (!resetting) void refreshMine(); }, 5000);   // keep last-seen spots and ages current

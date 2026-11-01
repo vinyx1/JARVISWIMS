@@ -29,9 +29,24 @@ app = FastAPI(title="jarvis")
 ASK_TIMEOUT_S = float(os.getenv("ASK_TIMEOUT_S", "12"))
 
 
+_MY = re.compile(r"^\s*MY\s+(.+?)\s*\((.*?)\)\s*(.*)$")
+
+
+def _note_my_items(frame_id: str, caption: dict) -> None:
+    """Every "MY <item> (...) <where>" in a caption updates that item's last-seen record."""
+    for obj in caption.get("objects") or []:
+        m = _MY.match(obj)
+        if m:
+            store.mark_seen(m.group(1), frame_id, m.group(3) or caption.get("scene", ""),
+                            caption.get("room_guess", ""), caption.get("landmarks") or [])
+
+
 def _caption_in_background(frame_id: str, jpeg: bytes, session_id: int) -> None:
     try:
-        store.set_caption(frame_id, ai.caption_frame(jpeg, mine=store.mine()), session_id)
+        caption = ai.caption_frame(jpeg, mine=store.mine())
+        store.set_caption(frame_id, caption, session_id)
+        if store.session() == session_id:
+            _note_my_items(frame_id, caption)
     except Exception:
         log.exception("captioning %s failed", frame_id)
 
@@ -87,13 +102,83 @@ def remember_item(question: str) -> str | None:
     return None
 
 
-def _current_view() -> dict | None:
+# ---------- "Jarvis, I'm leaving my AirPods here" ----------
+_PLACE = [
+    re.compile(rf"\b(?:i'm|i am|im) (?:putting|leaving|placing|dropping|setting) (?:down )?my {_ITEM} (?:down )?(?:here|there|right here|over here)\b"),
+    re.compile(rf"\bi (?:put|left|placed|dropped|set) (?:down )?my {_ITEM} (?:down )?(?:here|there|right here|over here)\b"),
+    re.compile(rf"\bmy {_ITEM} (?:is|are|goes|go|will be|'s|'re) (?:here|there|right here|over here)\b"),
+    re.compile(rf"\bremember where i (?:put|left|placed) my {_ITEM}"),
+    re.compile(rf"\b(?:putting|leaving|placing) my {_ITEM} (?:down )?(?:here|there|right here|over here)\b"),
+]
+
+
+def place_item(question: str) -> str | None:
+    """'Jarvis, I'm leaving my AirPods here' -> 'airpods'. None if not a placement."""
+    q = re.sub(r"[^a-z' ]+", " ", question.lower().replace("\u2019", "'"))
+    q = re.sub(r"\s+", " ", q).strip()
+    if _NOT_REMEMBER.match(q):
+        return None
+    for pattern in _PLACE:
+        m = pattern.search(q)
+        if m:
+            words = [w for w in m["item"].split() if w not in _STOP and w not in ("down", "up")]
+            if words:
+                return " ".join(words)
+    return None
+
+
+def _where_from_caption(item: str, caption: dict) -> str:
+    """Where the item is, in a few words, from the caption of the placement photo."""
+    words = set(item.lower().split())
+    for obj in caption.get("objects") or []:
+        m = _MY.match(obj)
+        if m and m.group(1).lower() == item.lower() and m.group(3):
+            return m.group(3)
+    for obj in caption.get("objects") or []:
+        if words & set(re.findall(r"[a-z]+", obj.lower())):
+            loc = re.search(r"\b(on|in|under|by|near|next to|beside|inside|behind|at)\b.*$", obj, re.I)
+            if loc:
+                return loc.group(0)
+    scene = (caption.get("scene") or "").rstrip(".")
+    return f"here ({scene[0].lower() + scene[1:]})" if scene and scene != "unclear frame" else "here"
+
+
+async def _place(item: str) -> dict:
+    """Save what the camera sees now as the item's location. Registers the item if it's new."""
+    frame = _current_view(caption=False)
+    if not frame:
+        return {"answer": "I can't see anything yet, sir. Start the camera and show me the spot.",
+                "kind": "other", "frames": []}
+    jpeg = (store.FRAMES / f"{frame['id']}.jpg").read_bytes()
+    if not any(m["item"].lower() == item.lower() for m in store.mine()):
+        try:
+            description = (await asyncio.wait_for(asyncio.to_thread(ai.describe_item, jpeg, item), timeout=8)) or item
+        except Exception:
+            description = item
+        store.remember(item, description, frame)
+    session_id = store.session()
+    try:
+        caption = await asyncio.wait_for(asyncio.to_thread(ai.caption_frame, jpeg, store.mine()), timeout=10)
+    except Exception:
+        caption = dict(ai.UNCLEAR)
+    store.set_caption(frame["id"], caption, session_id)
+    where = _where_from_caption(item, caption)
+    _note_my_items(frame["id"], caption)   # other registered items in view, too
+    store.mark_seen(item, frame["id"], where, caption.get("room_guess", ""), caption.get("landmarks") or [])
+    near = (caption.get("landmarks") or [None])[0]
+    said = f"Very good, sir. Your {item}: {where}" + (f", near the {near}" if near and near.lower() not in where.lower() else "") + "."
+    return {"answer": said, "kind": "remember",
+            "frames": [{"id": frame["id"], "url": frame["url"], "ts": frame["ts"], "note": f"{item}: {where}"}]}
+
+
+def _current_view(caption: bool = True) -> dict | None:
     """What the camera sees right now, as a saved (and captioned) frame."""
     if _preview["jpeg"] and time.time() - _preview["ts"] <= 3:
         jpeg = _preview["jpeg"]
         session_id = store.session()
         entry = store.add_frame(jpeg, time.time() * 1000)
-        asyncio.get_running_loop().run_in_executor(None, _caption_in_background, entry["id"], jpeg, session_id)
+        if caption:
+            asyncio.get_running_loop().run_in_executor(None, _caption_in_background, entry["id"], jpeg, session_id)
         return entry
     return store.latest()
 
@@ -110,6 +195,7 @@ async def _remember(item: str) -> dict:
     except Exception:
         log.exception("describe_item(%r) failed", item)
     store.remember(item, description, frame)
+    store.mark_seen(item, frame["id"], "where sir registered it")
     said = f"Noted, sir. I'll remember your {item}" + (f": {description}." if description != item else ".")
     return {"answer": said, "kind": "remember",
             "frames": [{"id": frame["id"], "url": frame["url"], "ts": frame["ts"], "note": description}]}
@@ -118,6 +204,9 @@ async def _remember(item: str) -> dict:
 async def _answer_request(body: Ask):
     """Never leave Jarvis silent on stage: time out or fail into an in-character reply."""
     try:
+        placed = place_item(body.question)
+        if placed:
+            return await _place(placed)
         item = remember_item(body.question)
         if item:
             return await _remember(item)

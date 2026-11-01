@@ -24,3 +24,21 @@ def test_stale_caption_after_reset_is_dropped(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("JARVIS_DATA")
         importlib.reload(store)
+
+
+def test_last_seen_record_is_kept_and_only_moves_forward(tmp_path, monkeypatch):
+    monkeypatch.setenv("JARVIS_DATA", str(tmp_path))
+    import store
+    store = importlib.reload(store)
+    try:
+        a = store.add_frame(b"\xff\xd8a", 1000.0)
+        b = store.add_frame(b"\xff\xd8b", 2000.0)
+        store.remember("airpods", "white AirPods Pro case", a)
+        assert store.mark_seen("AirPods", b["id"], "on desk by the window", "workspace", ["window"])
+        assert not store.mark_seen("airpods", a["id"], "older spot")       # older frame: ignored
+        assert not store.mark_seen("keys", b["id"], "on desk")             # not registered
+        seen = store.mine()[0]["last_seen"]
+        assert seen["where"] == "on desk by the window" and seen["frame_id"] == b["id"] and seen["ts"] == 2000.0
+    finally:
+        monkeypatch.delenv("JARVIS_DATA")
+        importlib.reload(store)

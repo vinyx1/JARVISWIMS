@@ -52,6 +52,12 @@ description. The HUD shows it as `REGISTERED · MY <ITEM>`.
 `/ask` gives up after 12s with an in-character "taking longer than expected" reply. If the
 answer model fails, a keyword search over the captions answers instead.
 
+**Leaving an item somewhere** ("Jarvis, I'm leaving my AirPods here", "I put my keys here",
+"my AirPods are right here", "remember where I put my bottle"): the backend saves what the
+camera sees now, describes the spot, and records it as that item's last-seen location
+(registering the item first if it's new). Reply is `kind: "remember"` with that photo:
+`"Very good, sir. Your airpods: on desk by the window, near the red exit sign."`
+
 ## GET /interaction
 
 The latest completed question and answer, from any device (phone or laptop, voice or typed),
@@ -100,9 +106,13 @@ then the page speaks with the browser's British voice.
 
 The registered items, oldest first. Cleared by `POST /reset`.
 ```json
-[ { "item": "laptop", "description": "silver MacBook with a pumpkin sticker", "frame_id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000 } ]
+[ { "item": "laptop", "description": "silver MacBook with a pumpkin sticker", "frame_id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000,
+    "last_seen": { "frame_id": "f_000188", "url": "/frames/f_000188.jpg", "ts": 1730400300000,
+                   "where": "on desk by the window", "room": "workspace tables", "landmarks": ["window"] } } ]
 ```
 After registration, captions write the item as `"MY laptop (silver MacBook, pumpkin sticker) on table"`.
+Every such caption, and every "I'm leaving my X here", updates `last_seen` (optional; only newer
+frames replace it). It never expires, so "where's my laptop?" works however long ago that was.
 
 ## POST /preview  ·  GET /preview.jpg
 

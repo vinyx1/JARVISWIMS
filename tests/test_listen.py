@@ -93,3 +93,24 @@ def test_decode_wav_rejects_non_wav():
 def test_too_short_is_empty_without_loading_the_model(monkeypatch):
     monkeypatch.setattr(stt, "_load", lambda: pytest.fail("model should not load"))
     assert stt.transcribe(_wav(np.zeros(1600, dtype=np.float32), 16000)) == ""
+
+
+@pytest.mark.parametrize("text, item", [
+    ("Jarvis, I'm leaving my AirPods here", "airpods"),
+    ("I put my keys here", "keys"),
+    ("my AirPods are right here", "airpods"),
+    ("putting my helmet down here", "helmet"),
+    ("remember where I put my black water bottle", "black water bottle"),
+    ("Jarvis, where are my AirPods?", None),
+    ("this is my laptop, remember it", None),
+])
+def test_place_item(text, item):
+    assert main.place_item(text) == item
+
+
+def test_where_from_caption_prefers_the_my_tag_then_the_item_then_the_scene():
+    cap = {"scene": "A desk by the window.", "objects": ["MY airpods (white AirPods case) on desk by the window"]}
+    assert main._where_from_caption("airpods", cap) == "on desk by the window"
+    cap = {"scene": "A desk.", "objects": ["white airpods case on the desk next to a mug"]}
+    assert main._where_from_caption("airpods", cap) == "on the desk next to a mug"
+    assert main._where_from_caption("airpods", {"scene": "A cluttered desk.", "objects": []}) == "here (a cluttered desk)"

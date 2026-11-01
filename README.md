@@ -28,6 +28,11 @@ heard twice). **Audio:** every device with its audio on speaks every answer. Pho
 by default (switch on the capture page); laptop audio is off by default (**V**). Speech is
 transcribed on the laptop by Whisper (offline, free); the first run downloads its model (~480 MB).
 
+**Finding your own things:** "Jarvis, this is my AirPods, remember it" registers them. When you
+put them down, say **"Jarvis, I'm leaving my AirPods here"**: he saves the spot from the camera.
+Later, "where are my AirPods?" answers from that spot (or a newer sighting), however long ago.
+The HUD's MY ITEMS shows where each was last seen.
+
 HUD keys: **Space** talk · **M** hands-free · **Q** phone QR · **V** laptop audio on/off · **R** clear memory.
 
 **Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →

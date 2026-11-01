@@ -197,3 +197,22 @@ def test_no_registered_items_adds_nothing(use_client):
     client = use_client(FakeClient(model_reply({"answer": "Not seen, sir.", "kind": "other", "frames": []})))
     answer.answer("where's my laptop?", FAKE_LOG)
     assert "registered" not in client.kwargs["messages"][0]["content"]
+
+
+def test_last_seen_record_reaches_the_model_and_its_frame_is_allowed(use_client):
+    old = {"frame_id": "f_000999", "url": "/frames/f_000999.jpg", "ts": NOW_MS - 30 * 60_000,
+           "where": "on desk by the window", "room": "workspace tables", "landmarks": ["window"]}
+    mine = [{"item": "airpods", "description": "white AirPods Pro case", "last_seen": old}]
+    client = use_client(FakeClient(model_reply({"answer": "On the desk by the window, sir.", "kind": "find",
+                                                "frames": [{"id": "f_000999", "note": "AirPods on desk"}]})))
+    result = answer.answer("where are my airpods?", FAKE_LOG, mine)
+    prompt = client.kwargs["messages"][0]["content"]
+    assert "Last seen: on desk by the window (workspace tables), near window" in prompt
+    assert "frame f_000999" in prompt
+    assert result["frames"] == [{"id": "f_000999", "url": "/frames/f_000999.jpg", "ts": old["ts"], "note": "AirPods on desk"}]
+
+
+def test_empty_log_still_answers_from_a_last_seen_record(use_client):
+    seen = {"frame_id": "f_000001", "url": "/frames/f_000001.jpg", "ts": 1.0, "where": "on desk"}
+    use_client(FakeClient(model_reply({"answer": "On the desk, sir.", "kind": "find", "frames": []})))
+    assert answer.answer("where are my airpods?", [], [{"item": "airpods", "description": "x", "last_seen": seen}])["answer"] == "On the desk, sir."
