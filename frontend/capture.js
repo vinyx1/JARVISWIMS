@@ -3,9 +3,9 @@ import {createCameraController,listCameras,captureFrame} from './camera.js';
 import {createCaptureLoop} from './core.js';
 import {createPreviewSender} from './preview.js';
 const $=id=>document.getElementById(id),video=$('phoneVideo'),api=createApi();
-let generation=0,opening=false,uncertain=false,wakeLock=null;
+let generation=0,opening=false,wakeLock=null;
 function status(text,error=false){$('phoneStatus').textContent=text;$('phoneStatus').classList.toggle('error',error);}
-function controls(){ $('phoneStart').disabled=opening||loop.running||loop.pending||uncertain;$('phoneStop').disabled=!opening&&!camera.stream;$('phoneDevice').disabled=opening||!!camera.stream;$('phoneBadge').textContent=loop.running?'CAPTURING':camera.stream?'PREVIEW':'CAMERA OFF';}
+function controls(){ $('phoneStart').disabled=opening||loop.running||loop.pending;$('phoneStop').disabled=!opening&&!camera.stream;$('phoneDevice').disabled=opening||!!camera.stream;$('phoneBadge').textContent=loop.running?'CAPTURING':camera.stream?'PREVIEW':'CAMERA OFF';}
 async function releaseWake(){const lock=wakeLock;wakeLock=null;if(lock)await lock.release().catch(()=>{});}
 function stop(){generation++;opening=false;loop.stop();preview.stop();camera.stop();void releaseWake();status('Capture stopped. Saved photos remain on the laptop.');controls();}
 const camera=createCameraController({media:{getUserMedia:constraints=>{
@@ -13,7 +13,7 @@ const camera=createCameraController({media:{getUserMedia:constraints=>{
  if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}};
  return navigator.mediaDevices.getUserMedia(constraints);
 }},attach(stream){video.srcObject=stream;if(stream)video.play().catch(()=>{});},onEnded(){stop();status('Camera disconnected. Tap Start to reconnect.',true);}});
-const loop=createCaptureLoop({sample:()=>captureFrame(video),async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}catch(error){if(error.uncertain){uncertain=true;status(error.message,true);}throw error;}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error){preview.stop();status(error.message,true);controls();void releaseWake();}});
+const loop=createCaptureLoop({sample:()=>captureFrame(video),async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error,{stopped}){if(!stopped){status(`Upload failed, retrying… (${error.message})`,true);return;}preview.stop();camera.stop();status(`Capture stopped after repeated upload failures: ${error.message} Tap Start to retry.`,true);controls();void releaseWake();}});
 $('phoneStart').onclick=async()=>{
  if(!navigator.mediaDevices?.getUserMedia){status('Camera access needs HTTPS (or localhost). Open the secure URL from the laptop.',true);return;}
  const token=++generation;opening=true;controls();status('Waiting for camera permission…');

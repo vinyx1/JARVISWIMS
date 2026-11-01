@@ -13,6 +13,23 @@ die() { c 31 "✗ $1"; exit 1; }
 
 [[ -x backend/.venv/bin/uvicorn ]] || die "No backend venv. See README.md setup."
 [[ -f .env ]] && grep -q '^ANTHROPIC_API_KEY=sk' .env || die "No ANTHROPIC_API_KEY in .env"
+# A revoked or mistyped key doesn't crash anything: every caption just turns into "unclear frame".
+# So prove it works now, with one tiny real call.
+KEYCHECK=$(backend/.venv/bin/python - <<'PY' 2>&1
+from pathlib import Path
+from dotenv import load_dotenv
+import anthropic
+load_dotenv(Path(".env"))
+try:
+    anthropic.Anthropic(timeout=15, max_retries=1).models.list(limit=1)
+    print("ok")
+except anthropic.AuthenticationError:
+    print("rejected: ANTHROPIC_API_KEY in .env is invalid or revoked")
+except Exception as e:
+    print(f"unreachable: {type(e).__name__} (no internet?)")
+PY
+)
+[[ "$KEYCHECK" == ok ]] || die "Anthropic API key check failed: $KEYCHECK"
 command -v cloudflared >/dev/null || die "cloudflared missing: brew install cloudflared"
 mkdir -p data
 

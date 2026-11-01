@@ -4,6 +4,11 @@ Resets the backend, replays a folder of photos, waits for every frame to be
 captioned, asks a question, and checks that every response matches API.md.
 Exits 0 on PASS and 1 on FAIL.
 
+It WIPES the server's memory. It refuses to if the server already holds frames, unless
+--force. To test without touching the demo's data, run a second server on its own folder:
+    JARVIS_DATA=/tmp/jarvis-smoke backend/.venv/bin/uvicorn main:app --app-dir backend --port 8010
+    backend/.venv/bin/python scripts/smoke.py --url http://localhost:8010
+
 Usage (from the repo root, with the backend running):
     backend/.venv/bin/python scripts/smoke.py
     backend/.venv/bin/python scripts/smoke.py samples/ --question "Jarvis, where did I leave my helmet?"
@@ -22,6 +27,7 @@ p.add_argument("folder", nargs="?", default="samples", help="scenario folder, e.
 p.add_argument("--url", default="http://localhost:8000")
 p.add_argument("--question", default="where did I leave my helmet?")
 p.add_argument("--timeout", type=float, default=60, help="seconds to wait for captions")
+p.add_argument("--force", action="store_true", help="reset even if the server already holds frames")
 args = p.parse_args()
 
 failures: list[str] = []
@@ -47,6 +53,10 @@ def valid_caption(c) -> bool:
 images = find_images(args.folder)
 
 with httpx.Client(base_url=args.url, timeout=60) as c:
+    existing = len(c.get("/log").json())
+    if existing and not args.force:
+        sys.exit(f"Refusing: {args.url} holds {existing} frames and this test resets it. "
+                 "Use a spare server (see the top of this file) or pass --force.")
     print(f"1. reset + upload {len(images)} frames to {args.url}")
     check(c.post("/reset").status_code == 200, "POST /reset returns 200")
     check(c.get("/latest").json() is None, "GET /latest is null after reset")
@@ -72,6 +82,9 @@ with httpx.Client(base_url=args.url, timeout=60) as c:
     latest = c.get("/latest").json()
     check(latest is not None and latest["id"] == ids[-1], "GET /latest is the newest frame")
     check(c.get(latest["url"]).status_code == 200 if latest else False, "latest frame image loads")
+    health = c.get("/health").json()
+    if not health.get("ai_ok"):
+        print(f"  WARN  the AI is failing, so captions are fallbacks: {health.get('ai_error')}")
 
     print(f"3. ask: {args.question!r}")
     t0 = time.time()

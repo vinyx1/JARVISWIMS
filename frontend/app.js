@@ -2,11 +2,9 @@
 // Phone owns input and speech; this page displays completed exchanges and evidence.
 import { createApi } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
-import { createObjectOverlay } from './overlay.js';
 
 const $ = id => document.getElementById(id);
 const api = createApi({ timeoutMs: 15000 });
-const objectOverlay = createObjectOverlay($('heroImg'), $('objectOutline'));
 let latest = null, resetting = false;
 let rememberedItems = [], mineGeneration = 0, activeEvidence = null;
 
@@ -122,14 +120,13 @@ function updateEvidenceTitle(frame, result) {
   $('evidenceTitle').classList.toggle('registered', result.kind === 'remember');
 }
 function hideEvidence() {
-  objectOverlay.clear(); activeEvidence = null; $('evidence').hidden = true;
+  activeEvidence = null; $('evidence').hidden = true;
   $('candidates').replaceChildren(); $('candidates').hidden = true;
 }
 function showHero(target, result) {
-  objectOverlay.clear(); updateEvidenceTitle(target, result);
+  updateEvidenceTitle(target, result);
   $('heroImg').src = `${safeFrameUrl(target.url, location.origin)}?v=${encodeURIComponent(target.ts)}`;
   $('heroImg').alt = target.note || 'Where Jarvis last saw the selected object';
-  objectOverlay.set(target.box);
   $('heroCap').textContent = `${target.note || ''} · ${formatSeenAt(target.ts)}`;
 }
 function showEvidence(result) {
@@ -157,7 +154,7 @@ function showEvidence(result) {
   const steps = result.kind === 'retrace' ? frames : [];
   $('trailTitle').hidden = !steps.length;
   $('trail').replaceChildren(...steps.map((frame, index) => {
-    const li = el('li'), image = el('img'); image.src = safeFrameUrl(frame.url, location.origin); image.alt = frame.note || `step ${index + 1}`;
+    const li = el('li'), image = el('img'); image.src = `${safeFrameUrl(frame.url, location.origin)}?v=${encodeURIComponent(frame.ts)}`; image.alt = frame.note || `step ${index + 1}`;
     li.append(image, el('span', null, `${index + 1}. ${frame.note || ''}`)); return li;
   }));
   $('evidence').hidden = false;
@@ -215,8 +212,7 @@ async function reset() {
   $('evidence').hidden = true;
   document.querySelectorAll('.line.pending').forEach(line => { line.classList.remove('pending'); line.textContent = 'JARVIS Question cancelled by memory reset.'; });
   try {
-    const log = await api.getLog();
-    if (log.some(entry => entry.caption === null)) { toast('STOP CAPTURE · WAIT FOR ANALYSIS'); return; }
+    // The backend drops captions that finish after a reset, so no need to wait for analysis.
     await api.resetMemory();
     rememberedItems = []; renderMine();
     $('transcript').replaceChildren(); $('trail').replaceChildren(); $('heroImg').removeAttribute('src'); $('heard').textContent = ''; showLatest(null);

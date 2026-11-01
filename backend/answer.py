@@ -1,6 +1,6 @@
 """Answering questions: Jarvis's brain and voice. Owner: Paul (D).
 
-answer(question, log) sends the caption log (text only) plus prompts/answer.md to
+answer(question, log, mine) sends the caption log (text only), sir's registered items, and prompts/answer.md to
 ANSWER_MODEL and returns the /ask shape from API.md. The model only supplies frame
 ids and notes; ids are checked against `log` and url/ts are filled in from it.
 
@@ -22,7 +22,9 @@ ANSWER_MODEL = "claude-sonnet-5-5"  # switch to "claude-haiku-5-5" if /ask takes
 ANSWER_EFFORT = "low"
 MAX_TOKENS = 2000
 MAX_LOG_ENTRIES = 200
-API_TIMEOUT_S = 10
+# One attempt, no retry, well inside main.py's 12s /ask limit, so a slow or failed call still
+# leaves time for the keyword fallback instead of the "taking longer than expected" reply.
+API_TIMEOUT_S = 8
 
 SYSTEM = (PROMPTS / "answer.md").read_text()
 ERROR_REPLY = {"answer": "I'm afraid the footage is unclear, sir.", "kind": "other", "frames": []}
@@ -75,7 +77,7 @@ def _get_client() -> anthropic.Anthropic:
     """Created lazily so importing this module never needs an API key (CI has none)."""
     global _client
     if _client is None:
-        _client = anthropic.Anthropic(timeout=API_TIMEOUT_S, max_retries=1)
+        _client = anthropic.Anthropic(timeout=API_TIMEOUT_S, max_retries=0)
     return _client
 
 
@@ -116,9 +118,18 @@ def _resolve_frames(refs: list[FrameRef], entries: list[dict]) -> list[dict]:
     ]
 
 
-def _ask_model(question: str, entries: list[dict], now_ms: float) -> AnswerOut | None:
+def _format_mine(mine) -> str:
+    lines = [f"- MY {m['item']}: {m.get('description') or m['item']}"
+             for m in mine or () if isinstance(m, dict) and m.get("item")]
+    if not lines:
+        return ""
+    return "Sir's registered items (captions tag them as MY <item>):\n" + "\n".join(lines) + "\n\n"
+
+
+def _ask_model(question: str, entries: list[dict], now_ms: float, mine=()) -> AnswerOut | None:
     """Return the model's validated reply, or None on refusal. Raises on API/parse errors."""
     user_text = (
+        f"{_format_mine(mine)}"
         f"Caption log, oldest first ({len(entries)} frames):\n"
         f"{_format_log(entries, now_ms)}\n\n"
         f"Question: {question}"
@@ -155,17 +166,18 @@ def _keyword_fallback(question: str, entries: list[dict], now_ms: float) -> dict
     return {**ERROR_REPLY, "frames": []}
 
 
-def answer(question: str, log: list[dict]) -> dict:
+def answer(question: str, log: list[dict], mine: list[dict] = ()) -> dict:
     """Return {answer, kind, frames: [{id, url, ts, note}]}.
 
     `log` holds only the frames that have finished captioning, oldest first.
+    `mine` is store.mine(): sir's registered items, [{item, description, ...}].
     """
     entries = log[-MAX_LOG_ENTRIES:]
     if not entries:
         return {**EMPTY_LOG_REPLY, "frames": []}
     now_ms = time.time() * 1000
     try:
-        out = _ask_model(question, entries, now_ms)
+        out = _ask_model(question, entries, now_ms, mine)
     except Exception:
         logger.exception("answering %r failed; using keyword fallback", question)
         out = None

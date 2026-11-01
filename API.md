@@ -49,9 +49,8 @@ description. The HUD shows it as `REGISTERED · MY <ITEM>`.
   "frames": [ { "id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000, "note": "silver MacBook with a pumpkin sticker" } ] }
 ```
 
-Any frame may also carry an optional `box: [x0, y0, x1, y1]`, the item's position as
-fractions (0–1) of the photo's width and height, from `ai.locate_object`. The HUD draws it
-as a gold outline. A missing box just means no outline; `JARVIS_BOX=0` turns boxes off.
+`/ask` gives up after 12s with an in-character "taking longer than expected" reply. If the
+answer model fails, a keyword search over the captions answers instead.
 
 ## GET /interaction
 
@@ -107,6 +106,15 @@ Returns the full caption log as a JSON array of `LogEntry`. For debugging and th
 ## POST /reset
 
 Clears the log, stored frames, the preview and registered items (`/mine`). Use it between demo runs.
+Captions still running from before the reset are dropped, so it's safe while the phone is capturing.
+
+## GET /health
+
+```json
+{ "ai_ok": false, "ai_error": "AuthenticationError: ... invalid x-api-key", "frames": 12 }
+```
+`ai_ok` turns false when a Claude call fails (bad key, no network) and true again on the next
+success. A failing AI never crashes anything; captions just become "unclear frame", so check this.
 
 ## Types
 

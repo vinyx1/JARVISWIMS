@@ -90,8 +90,6 @@ body.thinking .core { animation: blink .5s steps(2) infinite; }
 .hero-media img { display: block; width: 100%; height: 30vh; object-fit: contain; }
 .hero figcaption { font: 600 1.05cqw/1.3 var(--display); }
 /* outline only the selected object in its source photo, never the moving live feed */
-.object-outline { position: absolute; inset: 0; display: block; width: 100%; height: 100%; pointer-events: none; overflow: hidden; }
-.selected-object-box { fill: rgba(242, 181, 68, .08); stroke: var(--gold); stroke-width: 3; vector-effect: non-scaling-stroke; }
 
 .candidate-options { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: .6cqw; }
 .candidate-option { min-width: 0; padding: .4cqw; border: 1px solid var(--glass-line); border-radius: 3px; background: rgba(0, 0, 0, .35);

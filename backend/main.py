@@ -1,6 +1,5 @@
 """FastAPI app. Owner: Vince (B). Implements the contract in API.md."""
 import asyncio
-import inspect
 import logging
 import os
 import re
@@ -29,16 +28,9 @@ app = FastAPI(title="jarvis")
 ASK_TIMEOUT_S = float(os.getenv("ASK_TIMEOUT_S", "12"))
 
 
-def _with_mine(fn, *args):
-    """Call fn(*args, mine=...) once its owner has added the `mine` parameter; plain fn(*args) until then."""
-    if "mine" in inspect.signature(fn).parameters:
-        return fn(*args, mine=store.mine())
-    return fn(*args)
-
-
-def _caption_in_background(frame_id: str, jpeg: bytes) -> None:
+def _caption_in_background(frame_id: str, jpeg: bytes, session_id: int) -> None:
     try:
-        store.set_caption(frame_id, _with_mine(ai.caption_frame, jpeg))
+        store.set_caption(frame_id, ai.caption_frame(jpeg, mine=store.mine()), session_id)
     except Exception:
         log.exception("captioning %s failed", frame_id)
 
@@ -53,8 +45,9 @@ async def frame(
     heading: float = Form(None),
 ):
     jpeg = await image.read()
+    session_id = store.session()
     entry = store.add_frame(jpeg, ts or time.time() * 1000)
-    background.add_task(_caption_in_background, entry["id"], jpeg)
+    background.add_task(_caption_in_background, entry["id"], jpeg, session_id)
     return {"id": entry["id"], "caption": None}
 
 
@@ -97,8 +90,9 @@ def _current_view() -> dict | None:
     """What the camera sees right now, as a saved (and captioned) frame."""
     if _preview["jpeg"] and time.time() - _preview["ts"] <= 3:
         jpeg = _preview["jpeg"]
+        session_id = store.session()
         entry = store.add_frame(jpeg, time.time() * 1000)
-        asyncio.get_running_loop().run_in_executor(None, _caption_in_background, entry["id"], jpeg)
+        asyncio.get_running_loop().run_in_executor(None, _caption_in_background, entry["id"], jpeg, session_id)
         return entry
     return store.latest()
 
@@ -110,12 +104,10 @@ async def _remember(item: str) -> dict:
                 "kind": "other", "frames": []}
     jpeg = (store.FRAMES / f"{frame['id']}.jpg").read_bytes()
     description = item
-    describe = getattr(ai, "describe_item", None)  # Kenny's; until it lands, the bare name
-    if describe:
-        try:
-            description = (await asyncio.wait_for(asyncio.to_thread(describe, jpeg, item), timeout=8)) or item
-        except Exception:
-            log.exception("describe_item(%r) failed", item)
+    try:
+        description = (await asyncio.wait_for(asyncio.to_thread(ai.describe_item, jpeg, item), timeout=8)) or item
+    except Exception:
+        log.exception("describe_item(%r) failed", item)
     store.remember(item, description, frame)
     said = f"Noted, sir. I'll remember your {item}" + (f": {description}." if description != item else ".")
     return {"answer": said, "kind": "remember",
@@ -130,7 +122,7 @@ async def _answer_request(body: Ask):
             return await _remember(item)
         captioned = [e for e in store.read_log() if e["caption"]]
         result = await asyncio.wait_for(
-            asyncio.to_thread(_with_mine, answer.answer, body.question, captioned), timeout=ASK_TIMEOUT_S
+            asyncio.to_thread(answer.answer, body.question, captioned, store.mine()), timeout=ASK_TIMEOUT_S
         )
         return result
     except asyncio.TimeoutError:
@@ -211,6 +203,12 @@ async def speak(body: Speak):
     except Exception:
         log.exception("/speak failed")
     return Response(status_code=204)
+
+
+@app.get("/health")
+def health():
+    """Is the AI actually working? `ai_ok` is false after a failed caption call (bad key, no network)."""
+    return {"ai_ok": ai.last_error is None, "ai_error": ai.last_error, "frames": len(store.read_log())}
 
 
 @app.get("/mine")

@@ -179,3 +179,21 @@ def test_missing_client_falls_back(monkeypatch):
     monkeypatch.setattr(answer, "_get_client", no_key)
     result = answer.answer("where did I leave my helmet?", FAKE_LOG)
     assert [f["id"] for f in result["frames"]] == [HELMET_ID]
+
+
+# --- registered items ("this is my laptop") ----------------------------------
+
+def test_registered_items_reach_the_model(use_client):
+    client = use_client(FakeClient(model_reply({"answer": "On the table, sir.", "kind": "find",
+                                                "frames": [{"id": HELMET_ID, "note": "helmet"}]})))
+    mine = [{"item": "laptop", "description": "silver MacBook with a pumpkin sticker"}]
+    result = answer.answer("where's my laptop?", FAKE_LOG, mine)
+    prompt = client.kwargs["messages"][0]["content"]
+    assert "MY laptop: silver MacBook with a pumpkin sticker" in prompt
+    assert_contract(result, FAKE_LOG)
+
+
+def test_no_registered_items_adds_nothing(use_client):
+    client = use_client(FakeClient(model_reply({"answer": "Not seen, sir.", "kind": "other", "frames": []})))
+    answer.answer("where's my laptop?", FAKE_LOG)
+    assert "registered" not in client.kwargs["messages"][0]["content"]

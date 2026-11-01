@@ -4,11 +4,13 @@ JPEGs go in data/frames/. The log is kept in memory and written to data/log.json
 whenever it changes, so captions can be filled in after a frame is saved.
 """
 import json
+import os
 import shutil
 import threading
 from pathlib import Path
 
-DATA = Path(__file__).resolve().parent.parent / "data"
+# JARVIS_DATA lets a test server (scripts/smoke.py) use its own folder instead of the demo's.
+DATA = Path(os.environ.get("JARVIS_DATA") or Path(__file__).resolve().parent.parent / "data")
 FRAMES = DATA / "frames"
 LOG = DATA / "log.json"
 MINE = DATA / "mine.json"
@@ -17,6 +19,13 @@ FRAMES.mkdir(parents=True, exist_ok=True)
 _lock = threading.Lock()
 _log: list[dict] = json.loads(LOG.read_text()) if LOG.exists() else []
 _mine: list[dict] = json.loads(MINE.read_text()) if MINE.exists() else []
+# Bumped by reset(). Frame ids restart at f_000000 after a reset, so a caption still running
+# from the previous run must not land on the new frame that reuses its id.
+_session = 0
+
+
+def session() -> int:
+    return _session
 
 
 def _persist() -> None:
@@ -35,8 +44,10 @@ def add_frame(jpeg: bytes, ts: float) -> dict:
         return dict(entry)
 
 
-def set_caption(frame_id: str, caption: dict) -> None:
+def set_caption(frame_id: str, caption: dict, session_id: int | None = None) -> None:
     with _lock:
+        if session_id is not None and session_id != _session:
+            return  # captioned before a reset: that frame is gone
         for e in reversed(_log):
             if e["id"] == frame_id:
                 e["caption"] = caption
@@ -71,7 +82,9 @@ def mine() -> list[dict]:
 
 
 def reset() -> None:
+    global _session
     with _lock:
+        _session += 1
         _log.clear()
         _mine.clear()
         shutil.rmtree(FRAMES, ignore_errors=True)

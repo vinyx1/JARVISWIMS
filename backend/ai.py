@@ -3,7 +3,6 @@
 caption_frame: one photo -> Caption (claude-haiku-5-5, vision, structured output).
   With `mine` (store.mine()), sir's registered items are written "MY <item> (<description>) <where>".
 describe_item: one photo + an item name -> a short phrase that identifies that exact item.
-locate_object: one photo + an item -> a box around it, for the HUD outline.
 Shapes match API.md. Set ECHO_STUB_AI=1 to get fake data with no API key.
 
 Try it without the server:
@@ -26,6 +25,15 @@ UNCLEAR = {"scene": "unclear frame", "room_guess": "unknown", "objects": [], "la
 
 log = logging.getLogger("uvicorn.error")
 _client: anthropic.Anthropic | None = None
+# The last API failure as one line ("AuthenticationError: invalid x-api-key"), or None once a call
+# succeeds. GET /health reports it, so a dead key shows up instead of silent "unclear frame"s.
+last_error: str | None = None
+
+
+def _failed(what: str, err: Exception) -> None:
+    global last_error
+    last_error = f"{type(err).__name__}: {getattr(err, 'message', None) or err}"[:200]
+    log.error("%s failed: %s", what, last_error)
 
 
 def _client_() -> anthropic.Anthropic:
@@ -100,9 +108,11 @@ def caption_frame(jpeg: bytes, mine: list[dict] = ()) -> dict:
                                                    {"type": "text", "text": "Log this frame."}]}],
             output_format=Caption,
         )
-    except Exception:  # API, network, or parse error: never crash the pipeline
-        log.exception("caption call failed")
+    except Exception as err:  # API, network, or parse error: never crash the pipeline
+        _failed("caption", err)
         return dict(UNCLEAR)
+    global last_error
+    last_error = None
     if resp.stop_reason == "refusal" or resp.parsed_output is None:
         log.warning("caption got no output (stop_reason=%s, request=%s)", resp.stop_reason, resp._request_id)
         return dict(UNCLEAR)
@@ -172,80 +182,19 @@ def describe_item(jpeg: bytes, item: str) -> str:
             ]}],
             output_format=Described,
         )
-    except Exception:
-        log.exception("describe_item call failed")
+    except Exception as err:
+        _failed("describe_item", err)
         return item
     out = resp.parsed_output
-    text = " ".join(out.description.split()).strip(" .\"'") if out else ""
+    if resp.stop_reason == "refusal" or out is None or not out.visible:
+        return item
+    text = " ".join(out.description.split()).strip(" .\"'")
     # It will be moved, so a location is worse than useless: cut a trailing "near the bench" etc.
     text = re.sub(r"\s+(?:,\s*)?(?:near|next to|beside|by|against|leaning|sitting|resting|lying|placed|"
                   r"on (?:a|the|top of)|under (?:a|the)|in front of)\b.*$", "", text, flags=re.I).strip(" ,.")
-    if resp.stop_reason == "refusal" or not out.visible or not text or len(text.split()) > 14:
+    if not text or len(text.split()) > 14:
         return item
     return text
-
-
-# ---------- locating one object (for the HUD outline) ----------
-
-LOCATE_MODEL = os.environ.get("JARVIS_LOCATE_MODEL", CAPTION_MODEL)
-
-
-class Located(BaseModel):
-    found: bool
-    x0: int
-    y0: int
-    x1: int
-    y1: int
-
-
-def _jpeg_size(data: bytes) -> tuple[int, int] | None:
-    """(width, height) from a JPEG header, without needing Pillow."""
-    i = 2
-    while i + 9 < len(data) and data[i] == 0xFF:
-        marker, seglen = data[i + 1], int.from_bytes(data[i + 2:i + 4], "big")
-        if marker in (0xC0, 0xC1, 0xC2):
-            return int.from_bytes(data[i + 7:i + 9], "big"), int.from_bytes(data[i + 5:i + 7], "big")
-        i += 2 + seglen
-    return None
-
-
-def locate_object(jpeg: bytes, item: str) -> list[float] | None:
-    """Box around `item` in the photo as [x0, y0, x1, y1], fractions 0-1 of width/height.
-
-    Returns None if the item isn't visible or anything fails. Never raises.
-    """
-    if os.environ.get("ECHO_STUB_AI") == "1":
-        return [0.35, 0.45, 0.65, 0.85]
-    size = _jpeg_size(jpeg)
-    if not size:
-        return None
-    w, h = size
-    try:
-        resp = _client_().messages.parse(
-            model=LOCATE_MODEL,
-            max_tokens=1024,
-            output_config={"effort": "low"},
-            system=(PROMPTS / "locate.md").read_text(),
-            messages=[{"role": "user", "content": [
-                _image(jpeg),
-                {"type": "text", "text": f"Image size: {w}x{h} pixels.\nItem: {item}"},
-            ]}],
-            output_format=Located,
-        )
-    except Exception:
-        log.exception("locate call failed")
-        return None
-    b = resp.parsed_output
-    if resp.stop_reason == "refusal" or b is None or not b.found:
-        return None
-    x0, x1 = sorted((max(0, min(w, b.x0)), max(0, min(w, b.x1))))
-    y0, y1 = sorted((max(0, min(h, b.y0)), max(0, min(h, b.y1))))
-    if x1 - x0 < 2 or y1 - y0 < 2:
-        return None
-    # Pad 5% each side: a loose box beats one that clips the item.
-    pw, ph = 0.05 * (x1 - x0), 0.05 * (y1 - y0)
-    return [round(max(0, x0 - pw) / w, 4), round(max(0, y0 - ph) / h, 4),
-            round(min(w, x1 + pw) / w, 4), round(min(h, y1 + ph) / h, 4)]
 
 
 if __name__ == "__main__":
