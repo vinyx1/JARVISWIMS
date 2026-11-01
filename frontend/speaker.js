@@ -12,9 +12,24 @@ import {encodeWav} from './mic.js';
 
 const SILENCE = URL.createObjectURL?.(new Blob([encodeWav(new Float32Array(800))], {type: 'audio/wav'}));
 
+/** The acknowledgement chime: two quick rising notes (C6 then G6) with soft attack and decay. */
+export function chimeSamples(rate = 44100) {
+  const notes = [[1046.5, 0, 0.11], [1568, 0.085, 0.2]], len = Math.round(rate * 0.3), out = new Float32Array(len);
+  for (const [freq, start, dur] of notes) {
+    const s0 = Math.round(start * rate), n = Math.round(dur * rate);
+    for (let i = 0; i < n && s0 + i < len; i++) {
+      const t = i / rate, env = Math.min(1, t / 0.006) * Math.exp(-t * 18);
+      out[s0 + i] += 0.32 * env * (Math.sin(2 * Math.PI * freq * t) + 0.25 * Math.sin(4 * Math.PI * freq * t));
+    }
+  }
+  return out;
+}
+const CHIME = URL.createObjectURL?.(new Blob([encodeWav(chimeSamples(), 44100)], {type: 'audio/wav'}));
+
 export function createDeviceSpeaker({onBlocked = () => {}, onEvent = () => {}, fetchImpl = (...a) => fetch(...a)} = {}) {
   let context = null, source = null, controller = null, generation = 0, settle = null, speechTimer = null;
   let element = null, elementUnlocked = false, elementUrl = null, elementBusy = false;
+  let chimeEl = null, chimeUnlocked = false;   // its own player, so a chime never cuts off a reply
 
   /** Call from every tap/keypress: (re)unlocks both players while we have the user's gesture. */
   function unlock() {
@@ -36,6 +51,28 @@ export function createDeviceSpeaker({onBlocked = () => {}, onEvent = () => {}, f
         element.play().then(() => { elementUnlocked = true; }).catch(() => {});
       }
     } catch { /* text and replay remain available */ }
+    try {
+      if (!chimeEl && typeof Audio !== 'undefined') { chimeEl = new Audio(); chimeEl.setAttribute('playsinline', ''); }
+      if (chimeEl && !chimeUnlocked && SILENCE) { chimeEl.src = SILENCE; chimeEl.play().then(() => { chimeUnlocked = true; }).catch(() => {}); }
+    } catch {}
+  }
+
+  /** "Got it, sir": a short acknowledgement the moment a question is accepted. Never throws. */
+  function chime() {
+    try {
+      if (!chimeEl || !CHIME) return;
+      chimeEl.src = CHIME; chimeEl.currentTime = 0; chimeEl.volume = 0.8;
+      chimeEl.play().then(() => { chimeUnlocked = true; }).catch(() => {
+        if (context?.state !== 'running') return;   // fallback: the same notes through Web Audio
+        const now = context.currentTime;
+        for (const [f, at] of [[1046.5, 0], [1568, 0.085]]) {
+          const o = context.createOscillator(), g = context.createGain();
+          o.frequency.value = f; g.gain.setValueAtTime(0.0001, now + at);
+          g.gain.exponentialRampToValueAtTime(0.25, now + at + 0.006); g.gain.exponentialRampToValueAtTime(0.0001, now + at + 0.2);
+          o.connect(g); g.connect(context.destination); o.start(now + at); o.stop(now + at + 0.22);
+        }
+      });
+    } catch {}
   }
 
   function stop() {
@@ -122,5 +159,5 @@ export function createDeviceSpeaker({onBlocked = () => {}, onEvent = () => {}, f
     if (token === generation) { onEvent('blocked', 'every playback path refused'); onBlocked(); }
   }
 
-  return {unlock, stop, play};
+  return {unlock, stop, play, chime};
 }

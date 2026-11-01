@@ -363,13 +363,15 @@ async def still(image: UploadFile = File(...)):
 
 @app.post("/listen")
 async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: UploadFile | None = File(None),
-                 can_send_still: bool = Form(False), source: str | None = Form(None)):
+                 can_send_still: bool = Form(False), source: str | None = Form(None), answer: bool = Form(True)):
     """One spoken utterance (16 kHz WAV from frontend/mic.js) -> what was heard, and Jarvis's answer.
 
     mode "ask":  everything said is the question (push-to-talk, or right after "Jarvis" alone).
     mode "wake": hands-free; act only if "Jarvis" was said. "Jarvis" alone -> armed: the next
                  utterance (sent with mode "ask") is the question.
     Reply: {"heard", "question", "armed", "result", "need_still"}; result is the /ask reply, or null.
+    answer=false: only transcribe and check for "Jarvis"; the sender then plays its acknowledgement
+    and asks the returned question via /ask (two steps, so the chime comes before the wait).
     can_send_still: the sender has a camera. Then "this is my X" / "I'm leaving my X here" come
     back with need_still: true and no result: the sender takes a sharp photo, POSTs it to /still
     and asks the question via /ask. Everything else needs no photo, so none is uploaded.
@@ -398,6 +400,8 @@ async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: 
     if can_send_still is True and not hasattr(still, "read") and (place_item(question) or remember_item(question)):
         reply["need_still"] = True   # "remember this": get a sharp photo first
         return reply
+    if answer is False:
+        return reply   # the sender acknowledges first (a chime), then asks via /ask
     reply["result"] = await ask(Ask(question=question, source=source if isinstance(source, str) else None))
     return reply
 

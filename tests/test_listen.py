@@ -188,3 +188,10 @@ def test_spoken_questions_carry_the_device_id(monkeypatch):
     monkeypatch.setattr(main, "ask", fake_ask)
     asyncio.run(main.listen(audio=Upload(), mode="wake", source="phone-abc"))
     assert seen["source"] == "phone-abc"
+
+
+def test_transcribe_only_returns_the_question_without_answering(monkeypatch):
+    reply, asked = run_listen(monkeypatch, "Jarvis, where is my mug?", "wake", answer=False)
+    assert reply["question"] == "where is my mug" and reply["result"] is None
+    asked.assert_not_awaited()
+    assert main.activity()["state"] == "thinking"   # the HUD already shows him thinking

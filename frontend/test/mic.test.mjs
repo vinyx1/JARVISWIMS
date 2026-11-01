@@ -103,3 +103,12 @@ test('holding to talk shows "recording", even when the mic was already on', asyn
   mic.hold(true); await mic.resume();
   assert.equal(states.at(-1), 'recording');
 });
+
+test('the acknowledgement chime is short, audible and never clips', async () => {
+  globalThis.URL.createObjectURL ??= () => 'blob:x';
+  const {chimeSamples} = await import('../speaker.js');
+  const s = chimeSamples(44100);
+  assert.ok(s.length / 44100 < 0.35);
+  const peak = Math.max(...s.map(Math.abs));
+  assert.ok(peak > 0.2 && peak <= 1);
+});

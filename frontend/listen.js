@@ -6,6 +6,9 @@ export const ARMED_MS = 8000;   // after "Jarvis" on its own, the next sentence 
 /**
  * askWithPhoto(question): optional; when the reply says need_still ("this is my X, remember it"),
  * take a sharp photo, send it, ask the question and return the /ask result.
+ * ask(question): optional; when given, /listen only transcribes and this asks the question, so
+ * onAccepted() (the acknowledgement chime) plays as soon as Jarvis knows he's being addressed,
+ * before the answer is ready. Push-to-talk acknowledges even earlier: on release.
  * @param {{listen: (wav: Uint8Array, mode: 'ask'|'wake') => Promise<any>,
  *          mic: {pause(): void, resume(): Promise<void>},
  *          speak: (text: string) => Promise<void>,
@@ -13,7 +16,7 @@ export const ARMED_MS = 8000;   // after "Jarvis" on its own, the next sentence 
  *          onAnswer?: (result: any, question: string) => void, onError?: (e: Error) => void,
  *          now?: () => number}} opts
  */
-export function createConversation({listen, askWithPhoto = null, mic, speak, onState = () => {}, onHeard = () => {}, onAnswer = () => {}, onError = () => {}, now = () => Date.now()}) {
+export function createConversation({listen, ask = null, askWithPhoto = null, onAccepted = () => {}, mic, speak, onState = () => {}, onHeard = () => {}, onAnswer = () => {}, onError = () => {}, now = () => Date.now()}) {
   let busy = false, armedUntil = 0, generation = 0;
 
   async function handle(wav, {manual}) {
@@ -21,6 +24,7 @@ export function createConversation({listen, askWithPhoto = null, mic, speak, onS
     busy = true; const token = ++generation;
     const mode = manual || now() < armedUntil ? 'ask' : 'wake';
     if (mode === 'ask') onState('thinking');
+    if (manual) onAccepted();   // push-to-talk: it's for Jarvis, acknowledge on release
     try {
       const reply = await listen(wav, mode);
       if (token !== generation) return;
@@ -28,9 +32,10 @@ export function createConversation({listen, askWithPhoto = null, mic, speak, onS
       if (reply.armed) { armedUntil = now() + ARMED_MS; onState('armed'); return; }
       armedUntil = 0;
       let result = reply.result;
-      if (!result && reply.need_still && reply.question && askWithPhoto) {
+      if (!result && reply.question && (reply.need_still ? askWithPhoto : ask)) {
+        if (!manual) onAccepted();   // hands-free: "Jarvis" confirmed, acknowledge before the wait
         onState('thinking');
-        result = await askWithPhoto(reply.question);
+        result = await (reply.need_still ? askWithPhoto : ask)(reply.question);
         if (token !== generation) return;
       }
       if (!result) { onState(manual ? 'not-heard' : 'listening'); return; }

@@ -116,7 +116,9 @@ const mic = createMic({
   },
 });
 const convo = createConversation({
-  listen: (wav, mode) => api.listen(wav, mode), mic, speak: speakOnLaptop,
+  listen: (wav, mode) => api.listen(wav, mode, false, {answer: false}), mic, speak: speakOnLaptop,
+  ask: question => api.askQuestion(question, {mine: true}),
+  onAccepted: () => { if (laptopAudio) speaker.chime(); },
   onState: s => { if (s === 'thinking') setMode('thinking'); else if (s === 'armed') setMode('armed'); else if (s === 'not-heard' || s === 'error') setMode('idle'); },
   onHeard: text => { if (mode !== 'speaking') showQuestion(text); },
   onAnswer: () => {},
@@ -145,7 +147,10 @@ async function pollActivity() {
       const first = activityId === null; activityId = a.id;
       if (!first && mode !== 'listening') {
         if (a.state === 'armed') setMode('armed');
-        if (a.state === 'thinking') { showQuestion(a.question || ''); setMode('thinking'); }
+        if (a.state === 'thinking') {
+          if (mode !== 'thinking' && laptopAudio) speaker.chime();   // a question from the phone: acknowledge here too
+          showQuestion(a.question || ''); setMode('thinking');
+        }
         if (a.state === 'answered') void exchanges.refresh?.();
       }
     }
@@ -286,7 +291,7 @@ $('cmd').onsubmit = async e => {
   e.preventDefault();
   const q = $('cmdInput').value.trim(); if (!q) return;
   $('cmdInput').value = ''; $('cmd').hidden = true; $('cmdInput').blur();
-  showQuestion(q); setMode('thinking');
+  showQuestion(q); setMode('thinking'); if (laptopAudio) speaker.chime();
   try { await api.askQuestion(q); void checkExchange(); } catch (err) { setMode('idle'); toast('NO ANSWER'); }
 };
 window.addEventListener('pagehide', () => { convo.cancel(); mic.stop(); speaker.stop(); });

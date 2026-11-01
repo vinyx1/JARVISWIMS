@@ -108,6 +108,10 @@ is a question, answers it exactly like `/ask` (so it also shows on the HUD via `
 { "heard": "Hey Jarvis, where's my helmet?", "question": "where's my helmet",
   "armed": false, "need_still": false, "result": { "answer": "…", "kind": "find", "frames": [] } }
 ```
+`answer=false` (what the phone and HUD send): only transcribe and check for "Jarvis"; `result` is
+`null` and the page plays its acknowledgement chime, then asks `question` via `/ask` (with its
+`source`). Two steps, so the chime comes the moment Jarvis is addressed, not after the answer.
+
 `armed: true` means "Jarvis" was said with nothing after it: send the next utterance with
 `mode=ask`. `result` is `null` when there was nothing to answer. `400` for a bad WAV, `503`
 if speech recognition is unavailable.

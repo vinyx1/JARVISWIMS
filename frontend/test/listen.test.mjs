@@ -67,3 +67,25 @@ test('"this is my X" from a camera device: take a photo, then answer from it', a
   assert.deepEqual(photoAsks, ['this is my mug, remember it']);
   assert.deepEqual(spoken, ['Noted, sir.']);
 });
+
+test('hands-free: the chime plays once "Jarvis" is confirmed, before the answer is fetched', async () => {
+  const order = [];
+  const convo = createConversation({
+    listen: async (wav, mode) => { order.push(`listen:${mode}`); return {heard: 'Jarvis, where is my mug', question: 'where is my mug', armed: false, result: null, need_still: false}; },
+    ask: async q => { order.push(`ask:${q}`); return {answer: 'On the desk, sir.', kind: 'find', frames: []}; },
+    onAccepted: () => order.push('chime'),
+    mic: {pause() {}, async resume() {}}, speak: async t => { order.push(`speak:${t}`); },
+  });
+  await convo.handle(new Uint8Array(), {manual: false});
+  assert.deepEqual(order, ['listen:wake', 'chime', 'ask:where is my mug', 'speak:On the desk, sir.']);
+});
+
+test('push-to-talk chimes on release; chatter never chimes', async () => {
+  const chimes = [];
+  const make = reply => createConversation({listen: async () => reply, ask: async () => ({answer: 'x', kind: 'other', frames: []}),
+    onAccepted: () => chimes.push(1), mic: {pause() {}, async resume() {}}, speak: async () => {}});
+  await make({heard: 'where is my mug', question: 'where is my mug', armed: false, result: null}).handle(new Uint8Array(), {manual: true});
+  assert.equal(chimes.length, 1);   // once, on release (not again after transcribing)
+  await make({heard: 'nice costume', question: null, armed: false, result: null}).handle(new Uint8Array(), {manual: false});
+  assert.equal(chimes.length, 1);
+});

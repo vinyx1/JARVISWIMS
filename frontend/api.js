@@ -28,7 +28,8 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
     // One spoken utterance (16 kHz WAV from mic.js) -> {heard, question, armed, result}. See POST /listen.
     // still: optional sharp photo of what the camera sees now ("remember this" uses it).
     // canSendStill: this device has a camera; the reply may then ask for a photo (need_still).
-    listen(wav,mode='ask',canSendStill=false) {const body=new FormData();body.append('audio',new Blob([wav],{type:'audio/wav'}),'utterance.wav');body.append('mode',mode);body.append('source',clientId);if(canSendStill)body.append('can_send_still','true');return request('/listen',{method:'POST',body},x=>typeof x?.heard==='string'&&typeof x.armed==='boolean'&&(x.result===null||typeof x.result?.answer==='string'));},
+    // answer=false: only transcribe (the page chimes, then asks the returned question via /ask)
+    listen(wav,mode='ask',canSendStill=false,{answer=true}={}) {const body=new FormData();body.append('audio',new Blob([wav],{type:'audio/wav'}),'utterance.wav');body.append('mode',mode);body.append('source',clientId);if(canSendStill)body.append('can_send_still','true');if(!answer)body.append('answer','false');return request('/listen',{method:'POST',body},x=>typeof x?.heard==='string'&&typeof x.armed==='boolean'&&(x.result===null||typeof x.result?.answer==='string'));},
     // mine: tag the answer as this page's (the page then speaks it itself, not via /interaction)
     askQuestion(question,{mine=false}={}) {return json('/ask',mine?{question,source:clientId}:{question},x=>typeof x?.answer==='string'&&['find','retrace','remember','other'].includes(x.kind)&&Array.isArray(x.frames));},
     getInteraction:()=>request('/interaction',{cache:'no-store'},x=>x===null||(typeof x.id==='string'&&typeof x.question==='string'&&typeof x.result?.answer==='string'&&Array.isArray(x.result.frames))),

@@ -95,7 +95,10 @@ async function sharpStill(){
 }
 const convo=createConversation({
   // Audio only; a photo is sent only when the laptop asks for one ("this is my X, remember it").
-  listen:(wav,mode)=>voiceApi.listen(wav,mode,!!camera.stream),
+  // two steps: transcribe (and chime the moment "Jarvis" is confirmed), then ask
+  listen:(wav,mode)=>voiceApi.listen(wav,mode,!!camera.stream,{answer:false}),
+  ask:question=>voiceApi.askQuestion(question,{mine:true}),
+  onAccepted:()=>{if(audioOn())speaker.chime();},
   async askWithPhoto(question){const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});return voiceApi.askQuestion(question,{mine:true});},
   mic, speak:speakHere,
   onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
@@ -151,6 +154,7 @@ $('phoneReplay').onclick=()=>{$('phoneReplay').hidden=true;speaker.unlock();void
 $('phoneAskForm').onsubmit=async e=>{
   e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
   $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
+  if(audioOn())speaker.chime();   // typed: acknowledge on send
   try{const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});
     const result=await voiceApi.askQuestion(question,{mine:true});showAnswer(result);say(states.speaking());await speakHere(result.answer);}
   catch(error){$('phoneAnswer').textContent=error.message;}
