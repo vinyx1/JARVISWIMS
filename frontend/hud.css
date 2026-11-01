@@ -144,3 +144,13 @@ body.thinking .arc { animation-duration: .6s; }
 .candidate-option:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
 .candidate-option img { display: block; width: 100%; height: 80px; object-fit: contain; background: #000; }
 .candidate-option span { display: block; font-size: 12px; line-height: 1.3; margin-top: 4px; overflow-wrap: anywhere; }
+
+/* phone link QR (start screen, and Q for a big one) */
+.qr { width: 220px; height: 220px; margin: 14px auto 4px; padding: 0; background: #fff; border: 2px solid var(--cyan); box-shadow: 0 0 24px rgba(0,229,255,.35); image-rendering: pixelated; }
+.viewport .idle img.qr { width: min(240px, 38vh); height: min(240px, 38vh); object-fit: contain; filter: none; }
+.idle:has(img.qr:not([hidden])) .reticle { display: none; }   /* the QR takes the reticle's place */
+.qr-overlay { position: fixed; inset: 0; z-index: 9; display: grid; place-items: center; background: rgba(0,0,0,.9); }
+.qr-overlay[hidden] { display: none; }
+.qr-card { display: grid; justify-items: center; gap: 10px; padding: 28px 36px; border: 1px solid var(--line); background: #071720; text-align: center; }
+.qr-card .qr { width: min(60vh, 420px); height: min(60vh, 420px); }
+.qr-url { margin: 0; font-size: 15px; color: var(--muted); word-break: break-all; max-width: 420px; }

@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# One command for stage setup. Owner: Vince (B).
-#   scripts/demo.sh          start backend + tunnel, clear memory, keep the Mac awake, open the HUD
-#   scripts/demo.sh --keep   same, but keep the current memory (e.g. restarting mid-demo)
+# One command to run everything. Usually started as ./start (or double-click "Start Jarvis.command").
+#   ./start          set up on first run, start backend + tunnel, clear memory, keep the Mac awake,
+#                    open the HUD, and show a QR code for the iPhone (in the terminal and on the HUD)
+#   ./start --keep   same, but keep the current memory (e.g. restarting mid-demo)
 # Ctrl-C stops everything. Logs: data/backend.log, data/tunnel.log
 set -uo pipefail
 cd "$(dirname "$0")/.."
@@ -11,8 +12,18 @@ KEEP=0; [[ "${1:-}" == "--keep" ]] && KEEP=1
 c() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }   # c <color> <text>
 die() { c 31 "✗ $1"; exit 1; }
 
-[[ -x backend/.venv/bin/uvicorn ]] || die "No backend venv. See README.md setup."
-[[ -f .env ]] && grep -q '^ANTHROPIC_API_KEY=sk' .env || die "No ANTHROPIC_API_KEY in .env"
+# ---------- first-run setup (a fast no-op afterwards) ----------
+command -v brew >/dev/null || die "Homebrew missing: https://brew.sh"
+command -v uv >/dev/null || { c 36 "▶ Installing uv"; brew install uv || die "brew install uv failed"; }
+command -v cloudflared >/dev/null || { c 36 "▶ Installing cloudflared"; brew install cloudflared || die "brew install cloudflared failed"; }
+[[ -x backend/.venv/bin/python ]] || { c 36 "▶ Creating the Python environment"; uv venv -q backend/.venv || die "uv venv failed"; }
+uv pip install -q --python backend/.venv/bin/python -r backend/requirements.txt || die "Installing Python packages failed"
+if ! grep -q '^ANTHROPIC_API_KEY=sk' .env 2>/dev/null; then
+  [[ -f .env ]] || cp .env.example .env
+  printf 'Paste your Anthropic API key (sk-ant-…), then Enter: '; read -rs KEY; echo
+  [[ "$KEY" == sk-* ]] || die "That doesn't look like an Anthropic key"
+  grep -v '^ANTHROPIC_API_KEY=' .env > .env.tmp; echo "ANTHROPIC_API_KEY=$KEY" >> .env.tmp; mv .env.tmp .env; unset KEY
+fi
 # A revoked or mistyped key doesn't crash anything: every caption just turns into "unclear frame".
 # So prove it works now, with one tiny real call.
 KEYCHECK=$(backend/.venv/bin/python - <<'PY' 2>&1
@@ -29,18 +40,19 @@ except Exception as e:
     print(f"unreachable: {type(e).__name__} (no internet?)")
 PY
 )
-[[ "$KEYCHECK" == ok ]] || die "Anthropic API key check failed: $KEYCHECK"
-command -v cloudflared >/dev/null || die "cloudflared missing: brew install cloudflared"
+[[ "$KEYCHECK" == ok ]] || die "Anthropic API key check failed: $KEYCHECK (fix ANTHROPIC_API_KEY in .env)"
 mkdir -p data
 
 # Stop anything left over from an earlier run, so the port and the URL are ours.
 pkill -f "uvicorn main:app" 2>/dev/null
 pkill -f "cloudflared tunnel --url http://localhost:$PORT" 2>/dev/null
+rm -f data/phone_url.txt
 sleep 1
 
 PIDS=()
 cleanup() {
   echo; c 33 "Stopping backend, tunnel and caffeinate…"
+  rm -f data/phone_url.txt   # the URL dies with the tunnel; the HUD stops showing its QR
   kill "${PIDS[@]}" 2>/dev/null; wait 2>/dev/null; exit 0
 }
 trap cleanup INT TERM
@@ -75,6 +87,7 @@ if [[ -z "$URL" ]]; then
   die "No tunnel after 3 tries. Check the internet/hotspot; see data/tunnel.log"
 fi
 PIDS+=("$TUNNEL")
+printf '%s' "$URL/capture.html" > data/phone_url.txt   # the HUD turns this into a QR code
 
 # The Mac's own DNS often caches a miss for brand-new names, so check through 1.1.1.1.
 HOST=${URL#https://}; ok=0
@@ -109,11 +122,12 @@ OSA
 
 echo
 c "1;32" "  iPhone →  $URL/capture.html"
-command -v qrencode >/dev/null && qrencode -t ansiutf8 "$URL/capture.html"
+backend/.venv/bin/python -c "import segno,sys; segno.make(sys.argv[1], error='m').terminal(compact=True)" "$URL/capture.html" 2>/dev/null
+c 2 "  (the same QR is on the HUD; press Q there to show it big)"
 (( ok )) || c 33 "  (tunnel not answering yet; wait ~30s, then refresh on the phone)"
 printf '%s' "$URL/capture.html" | pbcopy 2>/dev/null && echo "  (copied to clipboard: AirDrop or text it to the phone)"
 echo
-c 2 "  Checklist: iPhone Auto-Lock → Never · click the HUD once (mic + voice) · ⌃⌘F full screen · R clears memory"
+c 2 "  Checklist: iPhone Auto-Lock → Never · ⌃⌘F full screen · Q phone QR · V laptop voice · R clears memory"
 c 2 "  Mac stays awake until Ctrl-C. Logs: data/backend.log, data/tunnel.log"
 echo
 

@@ -209,6 +209,19 @@ $('askForm').onsubmit=async e=>{
   catch(error){typed.delete(question);pending.classList.remove('pending');pending.textContent=`JARVIS ${error.message}`;}
 };
 
+// ---------- phone link QR: the tunnel URL changes every run, so keep asking ----------
+let phoneUrl=null;
+async function refreshPhoneLink(){
+  try{
+    const {url}=await (await fetch('/phone',{cache:'no-store'})).json();
+    if(url===phoneUrl)return; phoneUrl=url;
+    document.querySelectorAll('[data-qr]').forEach(img=>{img.hidden=!url;if(url)img.src=`/qr.svg?u=${encodeURIComponent(url)}`;});
+    document.querySelectorAll('[data-qr-url]').forEach(p=>{p.textContent=url||'Waiting for the tunnel… (start it with ./start)';});
+    document.querySelectorAll('[data-qr-hint]').forEach(p=>{p.textContent=url?'Scan with the iPhone camera, then press Start.':'Open the capture page on the iPhone and press Start.';});
+  }catch{/* backend restarting; try again next time */}
+}
+void refreshPhoneLink(); setInterval(refreshPhoneLink,3000);
+
 // the first poll may return an answer from before this page loaded: never speak that one
 setTimeout(()=>{firstExchange=false;},2500);
 showVoiceChip();
@@ -217,8 +230,9 @@ document.addEventListener('keydown',async e=>{
   if(e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable||resetting)return;
   const plain=!e.repeat&&!e.metaKey&&!e.ctrlKey&&!e.altKey;
   if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopVoice',laptopVoice?'1':'0');}catch{}showVoiceChip();toast(laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE');}
+  if((e.key==='q'||e.key==='Q')&&plain){$('qrOverlay').hidden=!$('qrOverlay').hidden;void refreshPhoneLink();}
   if((e.key==='r'||e.key==='R')&&plain)await reset();
-  if(e.key==='Escape')$('evidence').hidden=true;
+  if(e.key==='Escape'){$('evidence').hidden=true;$('qrOverlay').hidden=true;}
 });
 
 async function reset() {

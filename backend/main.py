@@ -211,6 +211,34 @@ def health():
     return {"ai_ok": ai.last_error is None, "ai_error": ai.last_error, "frames": len(store.read_log())}
 
 
+# ---------- phone link: scripts/demo.sh writes the tunnel URL here; the HUD shows it as a QR code ----------
+PHONE_URL_FILE = store.DATA / "phone_url.txt"
+
+
+def _phone_url() -> str | None:
+    url = os.getenv("JARVIS_PHONE_URL") or (PHONE_URL_FILE.read_text().strip() if PHONE_URL_FILE.exists() else "")
+    return url if url.startswith("https://") else None
+
+
+@app.get("/phone")
+def phone():
+    """{"url": "https://….trycloudflare.com/capture.html"} once the tunnel is up, else {"url": null}."""
+    return {"url": _phone_url()}
+
+
+@app.get("/qr.svg")
+def qr_svg():
+    url = _phone_url()
+    if not url:
+        return Response(status_code=204)
+    import io
+
+    import segno
+    buf = io.BytesIO()
+    segno.make(url, error="m").save(buf, kind="svg", scale=8, border=2, dark="#000", light="#fff")
+    return Response(buf.getvalue(), media_type="image/svg+xml", headers={"Cache-Control": "no-store"})
+
+
 @app.get("/mine")
 def mine():
     return store.mine()

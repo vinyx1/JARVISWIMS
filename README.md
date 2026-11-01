@@ -5,7 +5,25 @@ Dress as Iron Man, hold up your phone, walk around, then say
 
 See `CLAUDE.md` for the plan, roles and rules, and `API.md` for the contract.
 
-## Setup (each teammate, once)
+## Quick start (one command)
+
+```bash
+./start
+```
+
+Or double-click **`Start Jarvis.command`** in Finder. The first run installs what it needs
+(uv, cloudflared, Python packages) and asks for your Anthropic API key. Every run then:
+
+1. checks the API key actually works,
+2. starts the backend and a fresh HTTPS tunnel for the iPhone,
+3. opens the HUD in Chrome, showing a **QR code**: scan it with the iPhone camera, tap
+   Start on the page that opens. The same QR prints in the terminal; press **Q** on the HUD
+   to show it big at any time.
+
+`./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
+HUD keys: **Q** phone QR · **V** Jarvis speaks on the laptop · **R** clear memory.
+
+## Manual setup (development)
 
 ```bash
 brew install uv                  # if missing

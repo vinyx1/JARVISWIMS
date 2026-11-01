@@ -28,7 +28,8 @@
         <div id="idle" class="idle">
           <div class="reticle"></div>
           <p>AWAITING VISUAL FEED</p>
-          <p class="hint">Open the capture page on the iPhone and press Start.</p>
+          <img class="qr" data-qr alt="QR code: open the camera page on the iPhone" hidden>
+          <p class="hint" data-qr-hint>Scan with the iPhone camera, then press Start.</p>
         </div>
         <span class="bracket tl"></span><span class="bracket tr"></span>
         <span class="bracket bl"></span><span class="bracket br"></span>
@@ -49,7 +50,7 @@
       <div class="panel-title">COMMS</div>
       <div id="transcript" class="transcript" aria-live="polite">
         <p class="line sys">Say <b>"Hey Jarvis, where did I leave my helmet?"</b> on the phone, or type below.<br>
-          <kbd>V</kbd> laptop voice · <kbd>R</kbd> clears memory.</p>
+          <kbd>Q</kbd> phone QR · <kbd>V</kbd> laptop voice · <kbd>R</kbd> clears memory.</p>
       </div>
       <div id="heard" class="heard"></div>
 
@@ -74,6 +75,16 @@
       </form>
     </section>
   </main>
+
+  <!-- Q: the phone link as a big QR code, any time -->
+  <div id="qrOverlay" class="qr-overlay" hidden>
+    <div class="qr-card">
+      <div class="panel-title">CONNECT THE SUIT CAMERA</div>
+      <img class="qr" data-qr alt="QR code: open the camera page on the iPhone" hidden>
+      <p class="qr-url" data-qr-url>Waiting for the tunnel…</p>
+      <p class="hint">Scan with the iPhone camera · <kbd>Q</kbd> to close</p>
+    </div>
+  </div>
 
   <div id="toast" class="toast" hidden></div>
   <script type="module" src="app.js"></script>
