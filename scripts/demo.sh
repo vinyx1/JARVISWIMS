@@ -26,7 +26,7 @@ if ! grep -q '^ANTHROPIC_API_KEY=sk' .env 2>/dev/null; then
 fi
 # A revoked or mistyped key doesn't crash anything: every caption just turns into "unclear frame".
 # So prove it works now, with one tiny real call.
-KEYCHECK=$(backend/.venv/bin/python - <<'PY' 2>&1
+KEYCHECK=$(backend/.venv/bin/python - <<'PY' 2>/dev/null | tail -1
 from pathlib import Path
 from dotenv import load_dotenv
 import anthropic
@@ -40,7 +40,7 @@ except Exception as e:
     print(f"unreachable: {type(e).__name__} (no internet?)")
 PY
 )
-[[ "$KEYCHECK" == ok ]] || die "Anthropic API key check failed: $KEYCHECK (fix ANTHROPIC_API_KEY in .env)"
+[[ "$KEYCHECK" == ok ]] || die "Anthropic API key check failed: ${KEYCHECK:-could not run the check} (fix ANTHROPIC_API_KEY in .env)"
 mkdir -p data
 
 # Stop anything left over from an earlier run, so the port and the URL are ours.
