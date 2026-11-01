@@ -42,3 +42,20 @@ def test_last_seen_record_is_kept_and_only_moves_forward(tmp_path, monkeypatch):
     finally:
         monkeypatch.delenv("JARVIS_DATA")
         importlib.reload(store)
+
+
+def test_remember_keeps_marks_and_closeup_and_reset_clears_them(tmp_path, monkeypatch):
+    monkeypatch.setenv("JARVIS_DATA", str(tmp_path))
+    import store
+    store = importlib.reload(store)
+    try:
+        f = store.add_frame(b"\xff\xd8a", 1.0)
+        entry = store.remember("Blue Mug", "blue mug with a chipped rim", f, ["chipped rim", "white handle"], b"\xff\xd8closeup")
+        assert entry["marks"] == ["chipped rim", "white handle"]
+        assert store.ref_path(entry).read_bytes() == b"\xff\xd8closeup"
+        assert store.ref_path(entry).name == "blue-mug.jpg"
+        store.reset()
+        assert store.ref_path(entry) is None
+    finally:
+        monkeypatch.delenv("JARVIS_DATA")
+        importlib.reload(store)

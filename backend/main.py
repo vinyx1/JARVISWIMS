@@ -74,12 +74,14 @@ class Ask(BaseModel):
 # ---------- "this is my laptop, remember it" ----------
 _ITEM = r"(?P<item>[a-z]+(?: [a-z]+){0,3})"
 _REMEMBER = [
-    re.compile(rf"\b(?:this|that|it)(?: is|'s| s) (?:my|mine) (?:own )?{_ITEM}"),   # this is my laptop
-    re.compile(rf"\b(?:this|that|the) {_ITEM} (?:is|'s| s) (?:mine|my own)\b"),     # this laptop is mine
-    re.compile(rf"\bremember (?:this|that|my) {_ITEM}"),                            # remember this laptop
+    # this is my laptop / these are my AirPods / they're my keys
+    re.compile(rf"\b(?:this|that|it|these|those|they)(?: is| are|'s|'re| s| re) (?:my|mine) (?:own )?{_ITEM}"),
+    # this laptop is mine / these keys are mine
+    re.compile(rf"\b(?:this|that|the|these|those) {_ITEM} (?:is|are|'s|'re| s) (?:mine|my own)\b"),
+    re.compile(rf"\bremember (?:this|that|these|those|my) {_ITEM}"),               # remember these keys
 ]
 _NOT_REMEMBER = re.compile(r"^\s*(?:where|did|do you|have you|what|when|which|how)\b")
-_STOP = {"remember", "please", "jarvis", "and", "so", "can", "could", "would", "will", "it", "for",
+_STOP = {"remember", "please", "jarvis", "and", "so", "can", "could", "would", "will", "it", "them", "for",
          "now", "okay", "ok", "right", "here", "there", "is", "mine", "me", "you", "save", "keep", "track"}
 
 
@@ -151,11 +153,7 @@ async def _place(item: str) -> dict:
                 "kind": "other", "frames": []}
     jpeg = (store.FRAMES / f"{frame['id']}.jpg").read_bytes()
     if not any(m["item"].lower() == item.lower() for m in store.mine()):
-        try:
-            description = (await asyncio.wait_for(asyncio.to_thread(ai.describe_item, jpeg, item), timeout=8)) or item
-        except Exception:
-            description = item
-        store.remember(item, description, frame)
+        await _study_and_register(item, jpeg, frame)
     session_id = store.session()
     try:
         caption = await asyncio.wait_for(asyncio.to_thread(ai.caption_frame, jpeg, store.mine()), timeout=10)
@@ -171,10 +169,19 @@ async def _place(item: str) -> dict:
             "frames": [{"id": frame["id"], "url": frame["url"], "ts": frame["ts"], "note": f"{item}: {where}"}]}
 
 
+# Sharp full-resolution photo the phone sends with what sir says (POST /listen's `still`, or
+# POST /still before a typed question). "Remember this" uses it instead of the small preview.
+_still: dict = {"jpeg": None, "ts": 0.0}
+STILL_MAX_AGE_S = 15
+
+
 def _current_view(caption: bool = True) -> dict | None:
-    """What the camera sees right now, as a saved (and captioned) frame."""
-    if _preview["jpeg"] and time.time() - _preview["ts"] <= 3:
-        jpeg = _preview["jpeg"]
+    """What the camera sees right now, as a saved (and captioned) frame: the sharp still sent with
+    the request if there is one, else the live preview, else the newest snapshot."""
+    fresh_still = _still["jpeg"] and time.time() - _still["ts"] <= STILL_MAX_AGE_S
+    fresh_preview = _preview["jpeg"] and time.time() - _preview["ts"] <= 3
+    if fresh_still or fresh_preview:
+        jpeg = _still["jpeg"] if fresh_still else _preview["jpeg"]
         session_id = store.session()
         entry = store.add_frame(jpeg, time.time() * 1000)
         if caption:
@@ -183,18 +190,25 @@ def _current_view(caption: bool = True) -> dict | None:
     return store.latest()
 
 
+async def _study_and_register(item: str, jpeg: bytes, frame: dict) -> str:
+    """Look closely at the item (description, distinguishing marks, close-up crop) and register it.
+    Returns the description (the bare item name if studying failed)."""
+    try:
+        study = await asyncio.wait_for(asyncio.to_thread(ai.study_item, jpeg, item), timeout=15)
+    except Exception:
+        log.exception("study_item(%r) failed", item)
+        study = {"description": item, "marks": [], "closeup": None}
+    store.remember(item, study["description"] or item, frame, study.get("marks") or [], study.get("closeup"))
+    return study["description"] or item
+
+
 async def _remember(item: str) -> dict:
     frame = _current_view()
     if not frame:
         return {"answer": "I can't see anything yet, sir. Start the camera and show it to me.",
                 "kind": "other", "frames": []}
     jpeg = (store.FRAMES / f"{frame['id']}.jpg").read_bytes()
-    description = item
-    try:
-        description = (await asyncio.wait_for(asyncio.to_thread(ai.describe_item, jpeg, item), timeout=8)) or item
-    except Exception:
-        log.exception("describe_item(%r) failed", item)
-    store.remember(item, description, frame)
+    description = await _study_and_register(item, jpeg, frame)
     store.mark_seen(item, frame["id"], "where sir registered it")
     said = f"Noted, sir. I'll remember your {item}" + (f": {description}." if description != item else ".")
     return {"answer": said, "kind": "remember",
@@ -263,8 +277,20 @@ def split_wake(text: str) -> tuple[bool, str]:
     return True, re.sub(r"\s+", " ", rest)
 
 
+def _keep_still(jpeg: bytes | None) -> None:
+    if jpeg:
+        _still.update(jpeg=jpeg, ts=time.time())
+
+
+@app.post("/still")
+async def still(image: UploadFile = File(...)):
+    """A sharp photo of what the camera sees right now, sent by the phone before a typed question."""
+    _keep_still(await image.read())
+    return {"ok": True}
+
+
 @app.post("/listen")
-async def listen(audio: UploadFile = File(...), mode: str = Form("ask")):
+async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: UploadFile | None = File(None)):
     """One spoken utterance (16 kHz WAV from frontend/mic.js) -> what was heard, and Jarvis's answer.
 
     mode "ask":  everything said is the question (push-to-talk, or right after "Jarvis" alone).
@@ -273,6 +299,8 @@ async def listen(audio: UploadFile = File(...), mode: str = Form("ask")):
     Reply: {"heard", "question", "armed", "result"}; result is the /ask reply, or null.
     """
     data = await audio.read()
+    if hasattr(still, "read"):  # optional upload (absent: None, or FastAPI's default marker)
+        _keep_still(await still.read())
     try:
         heard = await asyncio.to_thread(stt.transcribe, data)
     except ValueError as e:
@@ -437,6 +465,7 @@ def reset():
         _exchange = None
         store.reset()
         _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
+        _still.update(jpeg=None, ts=0.0)
     return {"ok": True}
 
 

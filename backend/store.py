@@ -5,6 +5,7 @@ whenever it changes, so captions can be filled in after a frame is saved.
 """
 import json
 import os
+import re
 import shutil
 import threading
 from pathlib import Path
@@ -12,9 +13,11 @@ from pathlib import Path
 # JARVIS_DATA lets a test server (scripts/smoke.py) use its own folder instead of the demo's.
 DATA = Path(os.environ.get("JARVIS_DATA") or Path(__file__).resolve().parent.parent / "data")
 FRAMES = DATA / "frames"
+REFS = DATA / "refs"      # close-ups of sir's registered items, one per item
 LOG = DATA / "log.json"
 MINE = DATA / "mine.json"
 FRAMES.mkdir(parents=True, exist_ok=True)
+REFS.mkdir(parents=True, exist_ok=True)
 
 _lock = threading.Lock()
 _log: list[dict] = json.loads(LOG.read_text()) if LOG.exists() else []
@@ -65,12 +68,25 @@ def latest() -> dict | None:
         return dict(_log[-1]) if _log else None
 
 
-def remember(item: str, description: str, frame: dict) -> dict:
-    """Register one of sir's own items. Re-registering the same item replaces it."""
+def ref_path(entry: dict) -> Path | None:
+    """The registered item's close-up reference photo, if one was saved."""
+    name = entry.get("ref")
+    path = REFS / name if name else None
+    return path if path and path.is_file() else None
+
+
+def remember(item: str, description: str, frame: dict, marks: list[str] = (), closeup: bytes | None = None) -> dict:
+    """Register one of sir's own items. Re-registering the same item replaces it.
+
+    closeup: a cropped, full-resolution photo of just the item, used to recognise it later."""
     with _lock:
         _mine[:] = [m for m in _mine if m["item"] != item]
         entry = {"item": item, "description": description, "frame_id": frame["id"],
-                 "url": frame["url"], "ts": frame["ts"]}
+                 "url": frame["url"], "ts": frame["ts"], "marks": list(marks)}
+        if closeup:
+            name = re.sub(r"[^a-z0-9]+", "-", item.lower()).strip("-") + ".jpg"
+            (REFS / name).write_bytes(closeup)
+            entry["ref"] = name
         _mine.append(entry)
         _persist()
         return dict(entry)
@@ -106,4 +122,6 @@ def reset() -> None:
         _mine.clear()
         shutil.rmtree(FRAMES, ignore_errors=True)
         FRAMES.mkdir(parents=True, exist_ok=True)
+        shutil.rmtree(REFS, ignore_errors=True)
+        REFS.mkdir(parents=True, exist_ok=True)
         _persist()

@@ -12,31 +12,30 @@ Fill in the fields:
 - room_guess: a short place label. Reuse the same label for the same area every time.
   Prefer these: "stage", "main hall", "snack table area", "hallway", "entrance",
   "workspace tables", "outside". Use "unknown" if you can't tell.
-- objects: movable things a person might lose or put down. Each entry is
-  "<color> <item> <detail> <where it is>", using everyday names:
-  - Resting somewhere: "red Iron Man helmet on grey chair", "black Dell monitor showing code on
-    left desk", "silver MacBook with stickers on table", "black North Face backpack on floor".
-  - Being carried or held by the camera wearer: "red Iron Man helmet in hand".
+- objects: every movable thing a person could own, put down and lose, whatever it is. Each
+  entry is "<color> <item> <detail> <where it is>", using the plain everyday name someone
+  would say out loud, so it can be found by name later:
+  - Resting somewhere: "black backpack on floor by the door", "silver laptop with stickers on
+    table", "blue mug with a chipped rim on the windowsill".
+  - Being carried or held by the camera wearer: "blue mug in hand".
   The "on ..." vs "in hand" part matters: it tells Jarvis where the item was left.
-  Always include the plain noun so it can be found by name: helmet, jacket, bag, backpack,
-  bottle, phone, keys, wallet, earbuds (AirPods: a small white case), laptop, monitor, TV,
-  tablet, headphones, mask. Use the right noun:
-  a laptop has a keyboard attached, a monitor is a standalone screen on a stand, a TV is a
-  large screen on a wall or cart. Never call a monitor a laptop.
+  Use the precise name for what it actually is (a laptop has a keyboard attached; a monitor
+  is a standalone screen; a case is not the thing inside it).
   Rooms are full of look-alikes, so add ONE detail that tells this one apart: brand or logo,
-  stickers, size, what's on its screen, or what it sits next to ("by the window", "next to
-  the pizza boxes"). Prefer details someone could say out loud.
-  Always list helmets, jackets, bags, bottles, phones, keys, wallets, earbuds/AirPods,
-  laptops and monitors if you see them, even when small or partly hidden: small things are
-  the easiest to lose. Leave out people, clothing people are wearing, and
-  furniture or fixtures (chairs, stools, tables, trash cans, bins and machines are places or
-  landmarks, not objects).
-- MY items: the request may list sir's registered items, each with a description and often a
-  reference photo. Only when you are confident the frame shows that exact item (same color,
-  brand and marks as the reference, not just the same kind of thing), write it as
+  stickers, size, wear, what's on its screen, or what it sits next to. Prefer details someone
+  could say out loud.
+  List small things too, even when partly hidden: small things are the easiest to lose.
+  Leave out people, clothing people are wearing, and furniture or fixtures (chairs, tables,
+  bins and machines are places or landmarks, not objects).
+- MY items: the request may list sir's registered items, each with a description, its
+  distinguishing marks and usually a close-up photo. Look for every one of them in the frame,
+  however small. Only when you are confident it is that exact item (same color, brand AND
+  marks as the close-up, not just the same kind of thing), write it as
   "MY <item> (<description copied exactly>) <where it is>", e.g.
-  "MY laptop (silver MacBook with a pumpkin sticker) on table". If unsure, write it normally.
-  Other items of the same kind are written normally, without MY.
+  "MY laptop (silver MacBook with a pumpkin sticker) on table". If it looks like the same kind
+  of thing but you can't confirm the marks, write it normally with "possibly sir's":
+  "white earbuds case, possibly sir's, on desk". Other items of the same kind are written
+  normally, without MY.
 - landmarks: fixed, distinctive things that help someone find their way back: signs, banners,
   posters, doors, stairs, pillars, tables, a stage, decorations. Be specific
   ("red exit sign", "orange pumpkin banner", "balloon arch"), not generic ("wall", "floor").

@@ -2,13 +2,14 @@
 
 caption_frame: one photo -> Caption (claude-haiku-5-5, vision, structured output).
   With `mine` (store.mine()), sir's registered items are written "MY <item> (<description>) <where>".
-describe_item: one photo + an item name -> a short phrase that identifies that exact item.
+study_item: one photo + an item name -> description, distinguishing marks and a close-up crop.
 Shapes match API.md. Set ECHO_STUB_AI=1 to get fake data with no API key.
 
 Try it without the server:
     backend/.venv/bin/python backend/ai.py samples/*.jpg
 """
 import base64
+import io
 import json
 import logging
 import os
@@ -58,7 +59,6 @@ def _media_type(data: bytes) -> str:
     return "image/jpeg"
 
 
-FRAMES = PROMPTS.parent / "data" / "frames"  # where store.py saves frames (the registration photos)
 MAX_REFS = 3  # reference photos per caption call: each one adds ~0.5s
 
 
@@ -68,18 +68,22 @@ def _image(jpeg: bytes) -> dict:
 
 
 def _mine_blocks(mine) -> list[dict]:
-    """Sir's registered items as content blocks: a line of text, plus the registration photo if saved."""
+    """Sir's registered items as content blocks: description and marks, plus a reference photo:
+    the close-up taken at registration, else the whole registration frame."""
+    import store  # local: store creates data folders on import
     blocks, refs = [], 0
     for m in mine or ():
         if not isinstance(m, dict) or not str(m.get("item", "")).strip():
             continue
         item, desc = str(m["item"]).strip(), str(m.get("description", "")).strip() or str(m["item"]).strip()
-        line = f'Registered: MY {item} = "{desc}".'
-        photo = FRAMES / f"{m.get('frame_id', '')}.jpg"
-        if refs < MAX_REFS and m.get("frame_id") and photo.is_file():
+        marks = [str(x) for x in m.get("marks") or [] if str(x).strip()]
+        line = f'Registered: MY {item} = "{desc}".' + (f" Its distinguishing marks: {'; '.join(marks)}." if marks else "")
+        closeup = store.ref_path(m)
+        photo = closeup or (store.FRAMES / f"{m.get('frame_id', '')}.jpg")
+        if refs < MAX_REFS and photo.is_file():
             refs += 1
-            blocks += [{"type": "text", "text": line + " Reference photo of it (sir was pointing the camera at it):"},
-                       _image(photo.read_bytes())]
+            what = "Close-up of it" if closeup else "Reference photo (sir was pointing the camera at it)"
+            blocks += [{"type": "text", "text": f"{line} {what}:"}, _image(photo.read_bytes())]
         else:
             blocks.append({"type": "text", "text": line})
     if blocks:
@@ -140,61 +144,121 @@ def _exact_mine(cap: dict, mine) -> dict:
     return cap
 
 
-# ---------- describing one of sir's items ("this is my laptop") ----------
+# ---------- studying one of sir's items ("this is my laptop, remember it") ----------
+# Registration is rare and must be accurate, so it uses a stronger model than captions, and
+# it returns everything at once: a short description, the marks that make this one unique,
+# and where it is in the photo so we can keep a close-up as the reference.
 
-DESCRIBE_PROMPT = """You are the vision system of J.A.R.V.I.S. Sir is pointing the camera at one of his own items
-and says it is his. Describe THAT item in one short phrase (4 to 10 words) that would pick it
-out from other items of the same kind in a crowded room.
+STUDY_MODEL = os.environ.get("JARVIS_STUDY_MODEL", "claude-sonnet-5-5")
 
-Include: its color, the brand or model if you can read or recognize it, and one or two marks
-only this one has: stickers, a case or cover, a logo, a pattern, a strap, size, damage, or
-what's on its screen. Format: "<color> <brand/kind> <item> with <mark>".
-Good: "silver MacBook with a pumpkin sticker", "black Dell monitor with a cracked bezel",
-"navy Herschel backpack with a red keychain".
-Bad: "open silver laptop on a folding table" (says where it is and nothing distinctive).
+STUDY_PROMPT = """You are the vision system of J.A.R.V.I.S. Sir is pointing the camera at one of his own
+belongings and says it is his. Study THAT item so you can pick it out later from look-alikes
+in a crowded room (other people own the same model).
 
-Never mention where it is, what it's on, or what's around it: it will be moved. If several
-items match, describe the one closest to the center of the photo. If no such item is visible,
-set visible to false and leave description empty."""
+- description: one short phrase, 4 to 10 words: "<color> <brand/kind> <item> with <mark>",
+  e.g. "silver MacBook with a pumpkin sticker", "white AirPods Pro case with a scratched lid".
+  Never mention where it is or what it sits on: it will be moved.
+- marks: up to 5 short, visible features that tell THIS one apart from an identical model:
+  stickers, scratches, dents, stains, wear, a case or cover, a keychain, writing, a missing
+  part, an unusual color. Only what you can actually see. Empty if it looks factory-new.
+- box: where the item is, in pixels of the image as given (x0, y0 top-left; x1, y1
+  bottom-right), around the item itself, not what it rests on.
+If several things fit, choose the one closest to the center and most in focus. If no such
+item is visible, set visible to false."""
 
 
-class Described(BaseModel):
+class Studied(BaseModel):
     visible: bool
     description: str
+    marks: list[str]
+    x0: int
+    y0: int
+    x1: int
+    y1: int
+
+
+def _strip_location(text: str) -> str:
+    """It will be moved, so a location is worse than useless: cut a trailing "on the desk" etc."""
+    return re.sub(r"\s+(?:,\s*)?(?:near|next to|beside|by|against|leaning|sitting|resting|lying|placed|"
+                  r"on (?:a|the|top of)|under (?:a|the)|in front of)\b.*$", "", text, flags=re.I).strip(" ,.")
+
+
+def crop(jpeg: bytes, box: list[float], pad: float = 0.2, min_side: int = 96) -> bytes | None:
+    """Close-up of a box given as fractions [x0, y0, x1, y1], padded so nothing gets clipped."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(jpeg)).convert("RGB")
+        w, h = img.size
+        x0, y0, x1, y1 = box[0] * w, box[1] * h, box[2] * w, box[3] * h
+        pw, ph = (x1 - x0) * pad, (y1 - y0) * pad
+        x0, y0, x1, y1 = max(0, x0 - pw), max(0, y0 - ph), min(w, x1 + pw), min(h, y1 + ph)
+        if x1 - x0 < min_side:   # tiny items: keep at least a min_side square of context
+            cx = (x0 + x1) / 2; x0, x1 = max(0, cx - min_side / 2), min(w, cx + min_side / 2)
+        if y1 - y0 < min_side:
+            cy = (y0 + y1) / 2; y0, y1 = max(0, cy - min_side / 2), min(h, cy + min_side / 2)
+        out = io.BytesIO()
+        img.crop((int(x0), int(y0), int(x1), int(y1))).save(out, "JPEG", quality=92)
+        return out.getvalue()
+    except Exception:
+        log.exception("crop failed")
+        return None
+
+
+def _size(jpeg: bytes) -> tuple[int, int] | None:
+    try:
+        from PIL import Image
+        return Image.open(io.BytesIO(jpeg)).size
+    except Exception:
+        return None
+
+
+def study_item(jpeg: bytes, item: str) -> dict:
+    """{"description", "marks": [...], "box": [x0, y0, x1, y1] fractions or None, "closeup": jpeg or None}.
+
+    On any error: {"description": item, "marks": [], "box": None, "closeup": None}. Never raises.
+    """
+    fallback = {"description": item, "marks": [], "box": None, "closeup": None}
+    if os.environ.get("ECHO_STUB_AI") == "1":
+        box = [0.3, 0.3, 0.7, 0.7]
+        return {"description": f"red {item} with a gold stripe", "marks": ["gold stripe", "scuffed corner"],
+                "box": box, "closeup": crop(jpeg, box)}
+    size = _size(jpeg)
+    if not size:
+        return fallback
+    w, h = size
+    try:
+        resp = _client_().messages.parse(
+            model=STUDY_MODEL,
+            max_tokens=1024,
+            output_config={"effort": "low"},
+            system=STUDY_PROMPT,
+            messages=[{"role": "user", "content": [
+                _image(jpeg),
+                {"type": "text", "text": f"Image size: {w}x{h} pixels.\nSir says: this is my {item}."},
+            ]}],
+            output_format=Studied,
+        )
+    except Exception as err:
+        _failed("study_item", err)
+        return fallback
+    out = resp.parsed_output
+    if resp.stop_reason == "refusal" or out is None or not out.visible:
+        return fallback
+    text = _strip_location(" ".join(out.description.split()).strip(" .\"'"))
+    description = text if text and len(text.split()) <= 14 else item
+    # Marks must be on the item itself: anything about its surroundings will be wrong once it moves.
+    nearby = re.compile(r"\b(beside|next to|near|nearby|behind|underneath|under it|on the|on a|on top of|"
+                        r"lying on|sitting on|resting on|surrounded|background)\b", re.I)
+    marks = [" ".join(m.split()).strip(" .") for m in out.marks if m.strip() and not nearby.search(m)][:5]
+    x0, x1 = sorted((max(0, min(w, out.x0)), max(0, min(w, out.x1))))
+    y0, y1 = sorted((max(0, min(h, out.y0)), max(0, min(h, out.y1))))
+    box = [x0 / w, y0 / h, x1 / w, y1 / h] if x1 - x0 >= 4 and y1 - y0 >= 4 else None
+    return {"description": description, "marks": marks, "box": box, "closeup": crop(jpeg, box) if box else None}
 
 
 def describe_item(jpeg: bytes, item: str) -> str:
-    """One short phrase that identifies this exact item, e.g. "silver MacBook with a pumpkin sticker".
-
-    Returns `item` itself on any error. Never raises.
-    """
-    if os.environ.get("ECHO_STUB_AI") == "1":
-        return f"red {item} with a gold stripe"
-    try:
-        resp = _client_().messages.parse(
-            model=CAPTION_MODEL,
-            max_tokens=1024,
-            output_config={"effort": "low"},
-            system=DESCRIBE_PROMPT,
-            messages=[{"role": "user", "content": [
-                _image(jpeg),
-                {"type": "text", "text": f"Sir says: this is my {item}."},
-            ]}],
-            output_format=Described,
-        )
-    except Exception as err:
-        _failed("describe_item", err)
-        return item
-    out = resp.parsed_output
-    if resp.stop_reason == "refusal" or out is None or not out.visible:
-        return item
-    text = " ".join(out.description.split()).strip(" .\"'")
-    # It will be moved, so a location is worse than useless: cut a trailing "near the bench" etc.
-    text = re.sub(r"\s+(?:,\s*)?(?:near|next to|beside|by|against|leaning|sitting|resting|lying|placed|"
-                  r"on (?:a|the|top of)|under (?:a|the)|in front of)\b.*$", "", text, flags=re.I).strip(" ,.")
-    if not text or len(text.split()) > 14:
-        return item
-    return text
+    """Just the description (kept for callers that only need the phrase)."""
+    return study_item(jpeg, item)["description"]
 
 
 if __name__ == "__main__":

@@ -10,7 +10,7 @@ async function releaseWake(){const lock=wakeLock;wakeLock=null;if(lock)await loc
 function stop(){generation++;opening=false;loop.stop();preview.stop();camera.stop();void releaseWake();status('Capture stopped. Saved photos remain on the laptop.');controls();}
 const camera=createCameraController({media:{getUserMedia:constraints=>{
  const requested=$('phoneDevice').value;
- if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}};
+ if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}};
  return navigator.mediaDevices.getUserMedia(constraints);
 }},attach(stream){video.srcObject=stream;if(stream)video.play().catch(()=>{});},onEnded(){stop();status('Camera disconnected. Tap Start to reconnect.',true);}});
 const loop=createCaptureLoop({sample:()=>captureFrame(video,{width:1024,quality:.8}),   // sharp enough for small things (AirPods, keys)async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error,{stopped}){if(!stopped){status(`Upload failed, retrying… (${error.message})`,true);return;}preview.stop();camera.stop();status(`Capture stopped after repeated upload failures: ${error.message} Tap Start to retry.`,true);controls();void releaseWake();}});
@@ -84,8 +84,14 @@ const mic=createMic({
   onLevel:level=>{$('phoneLevel').style.width=`${Math.round(level*100)}%`;},
   onState:s=>{if(states[s])say(states[s]());},
 });
+// A sharp, full-resolution photo of what the camera sees right now, sent with what sir says,
+// so "Jarvis, this is my ___, remember it" gets a clear look at the item. Null if the camera is off.
+async function sharpStill(){
+  if(!camera.stream||video.readyState<2)return null;
+  try{return (await captureFrame(video,{width:1920,quality:.88}))?.blob||null;}catch{return null;}
+}
 const convo=createConversation({
-  listen:(wav,mode)=>voiceApi.listen(wav,mode), mic, speak:speakHere,
+  listen:async(wav,mode)=>voiceApi.listen(wav,mode,await sharpStill()), mic, speak:speakHere,
   onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
   onHeard:text=>{$('phoneHeard').textContent=`You: ${text}`;},
   onAnswer:(result,question)=>{askedHere.set(question,Date.now());showAnswer(result);},
@@ -134,7 +140,8 @@ $('phoneAskForm').onsubmit=async e=>{
   e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
   $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
   askedHere.set(question,Date.now());
-  try{const result=await voiceApi.askQuestion(question);showAnswer(result);say(states.speaking());await speakHere(result.answer);}
+  try{const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});
+    const result=await voiceApi.askQuestion(question);showAnswer(result);say(states.speaking());await speakHere(result.answer);}
   catch(error){askedHere.delete(question);$('phoneAnswer').textContent=error.message;}
   say(idle());
 };

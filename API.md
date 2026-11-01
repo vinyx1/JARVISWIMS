@@ -83,6 +83,9 @@ Voice input. The browser records one utterance (`frontend/mic.js`) and sends it 
 - `wake`: hands-free; act only if "Jarvis" was said ("Hey Jarvis, where's my helmet?",
   "Where are my keys, Jarvis?"). Anything else is ignored.
 
+Optional `still`: a sharp full-resolution JPEG of what the camera sees as sir speaks. The phone
+sends it whenever its camera is on; "this is my X, remember it" uses it to study the item.
+
 The backend transcribes it locally with Whisper (`backend/stt.py`, no API key) and, if there
 is a question, answers it exactly like `/ask` (so it also shows on the HUD via `/interaction`).
 ```json
@@ -92,6 +95,11 @@ is a question, answers it exactly like `/ask` (so it also shows on the HUD via `
 `armed: true` means "Jarvis" was said with nothing after it: send the next utterance with
 `mode=ask`. `result` is `null` when there was nothing to answer. `400` for a bad WAV, `503`
 if speech recognition is unavailable.
+
+## POST /still
+
+`multipart/form-data` with `image`: a sharp photo of what the camera sees now. The phone sends
+it just before a typed question, so a typed "this is my X" gets the same clear look. `{"ok": true}`.
 
 ## POST /speak
 
@@ -110,6 +118,9 @@ The registered items, oldest first. Cleared by `POST /reset`.
     "last_seen": { "frame_id": "f_000188", "url": "/frames/f_000188.jpg", "ts": 1730400300000,
                    "where": "on desk by the window", "room": "workspace tables", "landmarks": ["window"] } } ]
 ```
+Registration studies the item once with a stronger model: a description, up to five
+distinguishing `marks` (scratches, stickers, wear), and a close-up crop kept as its reference
+photo. Every later snapshot is checked against that close-up and those marks.
 After registration, captions write the item as `"MY laptop (silver MacBook, pumpkin sticker) on table"`.
 Every such caption, and every "I'm leaving my X here", updates `last_seen` (optional; only newer
 frames replace it). It never expires, so "where's my laptop?" works however long ago that was.

@@ -63,8 +63,10 @@ Set `kind` from what they asked.
   or whose object clearly matches the registered description, plus its last-seen
   record. Whichever is most recent wins: a later `MY X` frame in the log beats an older
   last-seen record. Answer from the last-seen record when nothing in the log is newer,
-  however long ago it was, and put its frame id first in `frames`. Ignore look-alikes
-  that belong to someone else. If he has no record and his X never appears, say so;
+  however long ago it was, and put its frame id first in `frames`. Captions may say
+  "possibly sir's" when the item looked like his but its marks couldn't be confirmed:
+  if that is newer than anything confirmed, offer it as "what may be your X". Ignore
+  look-alikes that belong to someone else. If he has no record and his X never appears, say so;
   don't offer another one.
 - **Several plausible matches** (two laptops, X not registered, and the question
   gives no detail that tells them apart): say briefly that you saw more than one and

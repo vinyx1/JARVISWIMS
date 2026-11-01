@@ -114,3 +114,16 @@ def test_where_from_caption_prefers_the_my_tag_then_the_item_then_the_scene():
     cap = {"scene": "A desk.", "objects": ["white airpods case on the desk next to a mug"]}
     assert main._where_from_caption("airpods", cap) == "on the desk next to a mug"
     assert main._where_from_caption("airpods", {"scene": "A cluttered desk.", "objects": []}) == "here (a cluttered desk)"
+
+
+@pytest.mark.parametrize("text, item", [
+    ("Jarvis, this is my laptop, remember it", "laptop"),
+    ("Jarvis, these are my AirPods, remember them", "airpods"),
+    ("those are my keys", "keys"),
+    ("they're my glasses, remember them", "glasses"),
+    ("these keys are mine", "keys"),
+    ("remember these headphones", "headphones"),
+    ("where are my AirPods?", None),
+])
+def test_remember_item_singular_and_plural(text, item):
+    assert main.remember_item(text) == item
