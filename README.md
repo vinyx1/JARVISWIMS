@@ -26,8 +26,10 @@ gets "Access denied". The HUD on the laptop needs no key. Mind that the QR on th
 the key: anyone who scans it while it's up gets in (it hides once the camera feed starts).
 
 `./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
-**Talking to Jarvis:** the phone listens hands-free by default after your first tap (Start
-capture): just say "Jarvis, …", or hold **🎙 Hold to talk**. On the HUD, **hold Space** and speak. **Audio:** every device with its audio on speaks every answer. Phone audio is on
+**The phone** is just the camera: tap **Begin** (it asks for the camera, then the microphone),
+then say "Jarvis, …" any time; a Siri-style Jarvis slides up with your question and his answer.
+Hold anywhere on the screen to talk without saying "Jarvis". The old phone controls (camera
+picker, typed questions, audio switch) are at `/capture-debug.html`. On the HUD, **hold Space** and speak. **Audio:** every device with its audio on speaks every answer. Phone audio is on
 by default (switch on the capture page); laptop audio is off by default (**V**). Speech is
 transcribed on the laptop by Whisper (offline, free); the first run downloads its model (~480 MB).
 
