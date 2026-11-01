@@ -198,7 +198,11 @@ async function talk(down){
     mic.hold(true);
     if(!mic.on){try{await mic.start();}catch{mic.hold(false);toast('ALLOW THE MICROPHONE IN CHROME');}}
     else await mic.resume();
-  }else{mic.hold(false);if(!mic.auto)mic.stop();}
+  }else{
+    const outcome=mic.hold(false);   // the mic stays open, so the next Space starts instantly
+    if(outcome==='not-ready')toast(mic.on?'MIC READY · HOLD SPACE AND SPEAK':'ALLOW THE MICROPHONE, THEN HOLD SPACE');
+    if(outcome==='too-short')toast('KEEP HOLDING SPACE WHILE YOU SPEAK');
+  }
 }
 async function toggleHandsFree(){
   speaker.unlock();

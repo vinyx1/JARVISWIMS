@@ -356,6 +356,15 @@ def _load_ears():
     stt.warm_up()
 
 
+class FreshStatic(StaticFiles):
+    """Static files the browser must recheck every time (cheap 304s), so after an update the
+    HUD and phone never keep running old cached JavaScript."""
+    async def get_response(self, path, scope):
+        response = await super().get_response(path, scope)
+        response.headers["Cache-Control"] = "no-cache"
+        return response
+
+
 app.mount("/frames", StaticFiles(directory=store.FRAMES), name="frames")
 # Mount this last so the API routes take priority.
-app.mount("/", StaticFiles(directory=Path(__file__).resolve().parent.parent / "frontend", html=True), name="frontend")
+app.mount("/", FreshStatic(directory=Path(__file__).resolve().parent.parent / "frontend", html=True), name="frontend")

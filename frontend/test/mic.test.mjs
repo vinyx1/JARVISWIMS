@@ -63,3 +63,13 @@ test('VAD cuts very long speech at the maximum length', () => {
   while (!out && frames < 100) { out = vad.push(tone(0.2)); frames++; }
   assert.ok(out && frames < 40);
 });
+
+test('releasing push-to-talk before the mic opened reports not-ready and sends nothing', async () => {
+  const {createMic} = await import('../mic.js');
+  const sent = [];
+  const mic = createMic({onUtterance: w => sent.push(w)});
+  mic.hold(true);
+  assert.equal(mic.hold(false), 'not-ready');
+  assert.equal(mic.hold(false), 'not-ready');   // a second release is harmless
+  assert.deepEqual(sent, []);
+});

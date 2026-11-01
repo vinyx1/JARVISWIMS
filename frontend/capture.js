@@ -90,8 +90,11 @@ async function talkDown(e){
 }
 function talkUp(e){
   e?.preventDefault(); if(!$('phoneTalk').classList.contains('held'))return;
-  $('phoneTalk').classList.remove('held'); mic.hold(false);
-  if(!handsFree())mic.stop();   // push-to-talk only: give the mic back
+  $('phoneTalk').classList.remove('held');
+  // The mic stays open after the first hold, so later holds start instantly (no new prompt).
+  const outcome=mic.hold(false);
+  if(outcome==='not-ready')say(mic.on?'Microphone ready. Now hold the button while you speak.':'Allow the microphone, then hold the button while you speak.');
+  if(outcome==='too-short')say('Too short. Keep holding the button while you speak.');
 }
 $('phoneTalk').addEventListener('pointerdown',talkDown);
 for(const ev of ['pointerup','pointercancel','pointerleave'])$('phoneTalk').addEventListener(ev,talkUp);

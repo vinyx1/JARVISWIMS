@@ -93,10 +93,16 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
     if (utterance) onUtterance(encodeWav(utterance), {manual: false});
   }
 
-  async function open() {
-    stream = await media().getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}});
+  // iPhone Safari only lets audio start inside the tap itself: create/resume the context
+  // synchronously, before awaiting the microphone permission, or it stays silent forever.
+  function wakeAudio() {
     const AC = window.AudioContext || window.webkitAudioContext;
     ctx ??= new AC();
+    if (ctx.state !== 'running') ctx.resume().catch(() => {});
+  }
+  async function open() {
+    stream = await media().getUserMedia({audio: {echoCancellation: true, noiseSuppression: true, autoGainControl: true, channelCount: 1}});
+    wakeAudio();
     if (ctx.state !== 'running') await ctx.resume().catch(() => {});
     source = ctx.createMediaStreamSource(stream);
     // ScriptProcessor is deprecated but works everywhere, including iOS Safari, with no extra file.
@@ -117,21 +123,29 @@ export function createMic({onUtterance, onLevel = () => {}, onState = () => {}, 
     set auto(v) { auto = !!v; vad.reset(); },
     /** Must be called from a user gesture the first time. Throws if the mic is denied. */
     async start() {
+      wakeAudio();   // first, while we're still inside the tap/keypress
       if (wanted && stream) return;
       wanted = true; paused = false; vad.reset();
-      try { await open(); onState('listening'); }
+      try { await open(); onState(held ? 'recording' : 'listening'); }
       catch (e) { wanted = false; close(); onState(e?.name === 'NotAllowedError' ? 'denied' : 'error'); throw e; }
     },
     stop() { wanted = false; held = false; heldChunks = []; close(); vad.reset(); onState('off'); onLevel(0); },
-    /** Push-to-talk. Releasing sends everything recorded while held. */
+    /** True once the microphone is open and audio is flowing. */
+    get ready() { return !!stream && ctx?.state === 'running'; },
+    /**
+     * Push-to-talk. Releasing sends everything recorded while held.
+     * hold(false) returns 'sent', 'too-short' (released almost at once, or silence),
+     * or 'not-ready' (the mic was still opening, e.g. during the permission prompt).
+     */
     hold(down) {
-      if (down === held) return;
+      if (down === held) return down ? undefined : 'not-ready';
       held = down;
       if (down) { heldChunks = []; vad.reset(); onState('recording'); return; }
       const n = heldChunks.reduce((a, c) => a + c.length, 0);
       const all = new Float32Array(n); let o = 0; for (const c of heldChunks) { all.set(c, o); o += c.length; }
       heldChunks = []; onState(wanted ? 'listening' : 'off');
-      if (n >= RATE * 0.3) onUtterance(encodeWav(all), {manual: true});
+      if (n >= RATE * 0.3) { onUtterance(encodeWav(all), {manual: true}); return 'sent'; }
+      return n === 0 ? 'not-ready' : 'too-short';
     },
     /** Stop hearing (and on iPhone release the mic) while Jarvis talks. */
     pause() { paused = true; held = false; heldChunks = []; vad.reset(); if (stream) close(); onLevel(0); },
