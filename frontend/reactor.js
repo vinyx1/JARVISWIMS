@@ -165,11 +165,12 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
     const k10 = reveal(0.8, 0.2);
     if (k10) {
       ctx.globalCompositeOperation = 'source-over';
-      ctx.font = `${Math.max(9, R * 0.034)}px "IBM Plex Mono", ui-monospace, monospace`;
+      ctx.font = `${Math.max(10, R * 0.038)}px "Chakra Petch", "Arial Narrow", sans-serif`;
       for (const r of readouts) {
-        const x0 = Math.cos(r.angle) * R * 1.0, y0 = Math.sin(r.angle) * R * 1.0;
-        const right = Math.cos(r.angle) >= 0, x1 = x0 + (right ? 1 : -1) * R * 0.14, y1 = y0 + Math.sign(y0 || 1) * R * 0.08;
-        const x2 = x1 + (right ? 1 : -1) * R * 0.22;
+        // leader lines stay inside the canvas (its edge is ~1.19 R from the centre)
+        const x0 = Math.cos(r.angle) * R * 0.97, y0 = Math.sin(r.angle) * R * 0.97;
+        const right = Math.cos(r.angle) >= 0, x1 = x0 + (right ? 1 : -1) * R * 0.08, y1 = y0 + Math.sign(y0 || 1) * R * 0.07;
+        const x2 = x1 + (right ? 1 : -1) * R * 0.1;
         ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.lineTo(x2, y1);
         ctx.lineWidth = 1; ctx.strokeStyle = cyan(0.35 * k10); ctx.setLineDash([]); ctx.stroke();
         ctx.fillStyle = cyan(0.75 * k10); ctx.textAlign = right ? 'right' : 'left';

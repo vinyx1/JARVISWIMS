@@ -1,4 +1,5 @@
 // Hologram HUD (the projector). Jarvis as an animated core on the left; what he hears and says
+// (hold Space to talk through the laptop mic; hands-free listening lives on the phone)
 // on the right. He reacts like Siri: "Jarvis" (phone or laptop) locks the rings amber, a question
 // spins them up, his answer pulses them. D switches to the debug view (debug.html).
 import {createApi} from './api.js';
@@ -82,11 +83,14 @@ async function speakOnLaptop(text) {
 // The core breathes with whatever is loudest: the laptop mic while you talk, a speech-like
 // envelope while Jarvis talks (on whichever device), or nothing.
 let micLevel = 0;
+const vuBars = [...document.querySelectorAll('.vu i')];
 (function levels() {
   const t = performance.now() / 1000;
   const talking = performance.now() < speakingUntil;
   const syllables = talking ? 0.35 + 0.45 * Math.abs(Math.sin(t * 7.3)) * (0.6 + 0.4 * Math.sin(t * 2.1)) : 0;
   core.level = Math.max(syllables, mode === 'listening' ? micLevel : micLevel * 0.4);
+  const v = mode === 'listening' ? micLevel : 0;
+  vuBars.forEach((bar, i) => { bar.style.height = `${Math.round(18 + 82 * Math.min(1, v * (1.6 - i * 0.22)))}%`; });
   requestAnimationFrame(levels);
 })();
 
@@ -100,15 +104,15 @@ function answer(exchange, {speak}) {
   setTimeout(() => { if (mode === 'speaking' && performance.now() >= speakingUntil - 50) setMode('idle'); }, seconds * 1000 + 300);
 }
 
-// ---------- the laptop's own mic: hold Space, or M for hands-free ----------
+// ---------- the laptop's own mic: hold Space to talk ----------
 const spokenHere = new Set();
-const MIC = {off: 'MIC · HOLD SPACE', listening: () => mic.auto ? 'MIC · HANDS-FREE' : 'MIC · HOLD SPACE', recording: 'MIC · RECORDING',
-             denied: 'MIC BLOCKED', error: 'MIC ERROR'};
+const TALK = {off: 'Hold space to talk', listening: 'Hold space to talk', recording: 'Listening \u2014 let go to send',
+              denied: 'Microphone blocked \u2014 allow it in Chrome', error: 'Microphone error'};
 const mic = createMic({
   onUtterance: (wav, info) => void convo.handle(wav, info),
   onLevel: v => { micLevel = v; },
   onState: s => {
-    const t = MIC[s]; if (t) { $('roMic').textContent = typeof t === 'function' ? t() : t; $('roMic').className = s === 'recording' ? 'warn' : mic.auto ? 'on' : ''; }
+    if (TALK[s]) $('talkText').textContent = TALK[s];
     if (s === 'recording') setMode('listening');
   },
 });
@@ -170,8 +174,10 @@ setInterval(checkExchange, 1000);
 // ---------- readouts: clock, optics, memory, items, phone link ----------
 function clock() {
   const d = new Date();
-  $('roClock').textContent = d.toLocaleTimeString('en-GB');
-  $('roDate').textContent = d.toLocaleDateString('en-GB', {day: '2-digit', month: 'short', year: 'numeric'}).toUpperCase();
+  const pad = n => String(n).padStart(2, '0');
+  $('roClock').textContent = `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  $('roSec').textContent = pad(d.getSeconds());
+  $('roDate').textContent = d.toLocaleDateString('en-GB', {weekday: 'short', day: 'numeric', month: 'short', year: 'numeric'});
 }
 setInterval(clock, 1000); clock();
 function greetingFor(d = new Date()) { const h = d.getHours(); return h < 5 ? 'Up late again, sir.' : h < 12 ? 'Good morning, sir.' : h < 18 ? 'Good afternoon, sir.' : 'Good evening, sir.'; }
@@ -181,11 +187,11 @@ async function readouts() {
   try {
     const [latest, health] = await Promise.all([api.getLatest(), (await fetch('/health', {cache: 'no-store'})).json()]);
     opticsLive = !!latest && Date.now() - latest.ts < 20000;
-    $('roOptics').textContent = opticsLive ? 'OPTICS ● LIVE' : 'OPTICS ○ OFFLINE'; $('roOptics').className = opticsLive ? 'on' : '';
-    $('roMem').textContent = `MEM ${String(health.frames).padStart(3, '0')}`;
-    $('roItems').textContent = `ITEMS ${health.items ?? 0}`;
-    if (!health.ai_ok) { $('roOptics').textContent += ' · AI FAULT'; $('roOptics').className = 'warn'; }
-  } catch { $('roOptics').textContent = 'LINK LOST'; $('roOptics').className = 'warn'; }
+    $('roOptics').textContent = opticsLive ? 'live' : 'offline'; $('roOptics').className = `v ${opticsLive ? 'on' : ''}`;
+    $('roMem').textContent = String(health.frames).padStart(3, '0');
+    $('roItems').textContent = String(health.items ?? 0);
+    if (!health.ai_ok) { $('roOptics').textContent = 'ai fault'; $('roOptics').className = 'v warn'; }
+  } catch { $('roOptics').textContent = 'no link'; $('roOptics').className = 'v warn'; }
   try {
     const {url} = await (await fetch('/phone', {cache: 'no-store'})).json();
     if (url !== phoneUrl) { phoneUrl = url; document.querySelectorAll('[data-qr]').forEach(img => { if (url) img.src = `/qr.svg?u=${encodeURIComponent(url)}`; }); }
@@ -193,7 +199,7 @@ async function readouts() {
   $('link').hidden = opticsLive || !phoneUrl;
 }
 setInterval(readouts, 2500);
-function showAudio() { $('roAudio').textContent = laptopAudio ? 'AUDIO ON' : 'AUDIO OFF'; $('roAudio').className = laptopAudio ? 'on' : ''; }
+function showAudio() { $('roAudio').textContent = laptopAudio ? 'on' : 'off'; $('roAudio').className = `v ${laptopAudio ? 'on' : ''}`; }
 showAudio();
 
 function toast(text) { $('toast').textContent = text; $('toast').hidden = false; clearTimeout(toast.t); toast.t = setTimeout(() => ($('toast').hidden = true), 1700); }
@@ -249,7 +255,6 @@ document.addEventListener('keydown', async e => {
   if (!plain) return;
   const k = e.key.toLowerCase();
   if (k === 'enter') { e.preventDefault(); $('cmd').hidden = false; $('cmdInput').focus(); }
-  if (k === 'm') { speaker.unlock(); if (mic.auto) { mic.auto = false; convo.cancel(); mic.stop(); toast('HANDS-FREE OFF'); } else { mic.auto = true; try { await mic.start(); toast('HANDS-FREE · SAY “JARVIS, …”'); } catch { mic.auto = false; toast('ALLOW THE MICROPHONE IN CHROME'); } } }
   if (k === 'v') { laptopAudio = !laptopAudio; try { localStorage.setItem('jarvisLaptopAudio', laptopAudio ? '1' : '0'); } catch {} if (!laptopAudio) speaker.stop(); showAudio(); toast(laptopAudio ? 'LAPTOP AUDIO ON' : 'LAPTOP AUDIO OFF'); }
   if (k === 'q') $('qrOverlay').hidden = !$('qrOverlay').hidden;
   if (k === 'escape') $('qrOverlay').hidden = true;

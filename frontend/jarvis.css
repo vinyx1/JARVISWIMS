@@ -8,7 +8,10 @@
   --amber: #ffb040;
   --text: #d9f5ff;
   --muted: rgba(190, 232, 248, .55);
-  --mono: "IBM Plex Mono", ui-monospace, monospace;
+  /* Chakra Petch: squared, cut-corner shapes close to Arame Mono, the typeface of the Avengers
+     Iron Man HUD (which is commercial). Used with little tracking, not as spaced-out mono caps. */
+  --hud: "Chakra Petch", "Arial Narrow", sans-serif;
+  --mono: var(--hud);
   --cond: "Saira Condensed", "Arial Narrow", sans-serif;
   --body: "Saira", system-ui, sans-serif;
   --ease: cubic-bezier(.2, .75, .15, 1);
@@ -20,8 +23,7 @@ body {
   margin: 0; overflow: hidden; background: var(--bg); color: var(--text);
   font: 300 18px/1.45 var(--body); -webkit-font-smoothing: antialiased;
 }
-kbd { font: 500 10px var(--mono); color: var(--cyan); border: 1px solid var(--cyan-3); padding: 1px 5px; margin: 0 2px 0 8px; }
-.micro { margin: 0; font: 500 10.5px var(--mono); letter-spacing: .28em; color: var(--cyan-2); text-transform: uppercase; }
+.micro { margin: 0; font: 500 12px var(--hud); letter-spacing: .14em; color: var(--cyan-2); text-transform: uppercase; }
 .small { margin: 4px 0 0; font-size: 14px; color: var(--muted); }
 
 /* atmosphere: vignette + faint scanlines + a slow horizontal sweep */
@@ -35,18 +37,45 @@ kbd { font: 500 10px var(--mono); color: var(--cyan); border: 1px solid var(--cy
   animation: sweep 9s linear infinite; }
 @keyframes sweep { to { transform: translateY(136vh); } }
 
-/* top and bottom bars */
-.bar { position: fixed; left: 0; right: 0; z-index: 3; display: flex; justify-content: space-between; align-items: center;
-  padding: 18px 3.2vw; font: 400 11px var(--mono); letter-spacing: .22em; color: var(--muted); text-transform: uppercase;
-  transition: opacity .8s var(--ease); }
-.bar.top { top: 0; border-bottom: 1px solid rgba(95, 227, 255, .08); }
-.bar.bottom { bottom: 0; border-top: 1px solid rgba(95, 227, 255, .08); }
-.ident .mark { font: 300 15px var(--cond); letter-spacing: .5em; color: var(--text); margin-right: 18px; }
-.readouts { display: flex; gap: 22px; }
-.readouts .on { color: var(--cyan); }
-.readouts .warn { color: var(--amber); }
-.keys kbd:first-child { margin-left: 0; }
-[data-phase="boot"] .bar { opacity: 0; }
+/* HUD corners: bracketed readouts at the screen edges, not full-width bars */
+.hud-edge { position: fixed; left: 0; right: 0; z-index: 3; pointer-events: none; transition: opacity .8s var(--ease); }
+.hud-edge.top { top: 0; } .hud-edge.bottom { bottom: 0; }
+[data-phase="boot"] .hud-edge { opacity: 0; }
+.corner { position: absolute; display: flex; flex-direction: column; gap: 3px; font-family: var(--hud); }
+.corner::before { content: ""; position: absolute; width: 74px; height: 30px; border: 0 solid rgba(95, 227, 255, .45); }
+.corner::after { content: ""; position: absolute; width: 5px; height: 5px; background: var(--cyan); box-shadow: 0 0 8px var(--cyan); }
+.corner.tl { top: 30px; left: 3.4vw; }
+.corner.tl::before { top: -12px; left: -16px; border-top-width: 1px; border-left-width: 1px; }
+.corner.tl::after { top: -14px; left: -18px; }
+.corner.tr { top: 26px; right: 3.4vw; align-items: flex-end; }
+.corner.tr::before { top: -8px; right: -16px; border-top-width: 1px; border-right-width: 1px; }
+.corner.tr::after { top: -10px; right: -18px; }
+.corner.bl { bottom: 30px; left: 3.4vw; }
+.corner.bl::before { bottom: -12px; left: -16px; border-bottom-width: 1px; border-left-width: 1px; }
+.corner.bl::after { bottom: -14px; left: -18px; }
+.corner.br { bottom: 26px; right: 3.4vw; }
+.corner.br::before { bottom: -8px; right: -16px; border-bottom-width: 1px; border-right-width: 1px; }
+.corner.br::after { bottom: -10px; right: -18px; }
+
+.brand { font: 500 20px var(--hud); letter-spacing: .32em; color: #fff; }
+.tagline { font: 400 13px var(--hud); color: var(--muted); }
+.clock { font: 300 34px/1 var(--hud); color: #fff; font-variant-numeric: tabular-nums; }
+.clock small { font-size: 15px; color: var(--cyan); margin-left: 6px; vertical-align: top; }
+.date { font: 400 13px var(--hud); color: var(--muted); }
+
+.talk-hint { display: flex; align-items: center; gap: 12px; font: 400 16px var(--hud); color: var(--text); }
+.vu { display: flex; align-items: flex-end; gap: 2px; height: 16px; }
+.vu i { width: 3px; height: 30%; background: var(--cyan-2); transition: height .08s; }
+[data-mode="listening"] .talk-hint { color: var(--amber); }
+[data-mode="listening"] .vu i { background: var(--amber); }
+
+.gauges { flex-direction: row; gap: 0; }
+.g { display: flex; flex-direction: column; align-items: flex-end; padding: 0 18px; border-left: 1px solid rgba(95, 227, 255, .16); }
+.g:first-child { border-left: 0; }
+.g:last-child { padding-right: 0; }
+.g .v { font: 300 24px/1.05 var(--hud); color: #fff; font-variant-numeric: tabular-nums; }
+.g .l { font: 400 12px var(--hud); color: var(--muted); }
+.g .v.on { color: var(--cyan); } .g .v.warn { color: var(--amber); }
 
 /* the core: centred during the intro, then it moves to the side */
 .reactor-wrap { position: fixed; z-index: 1; left: 50%; top: 50%; width: min(86vh, 70vw); aspect-ratio: 1;
@@ -63,24 +92,24 @@ kbd { font: 500 10px var(--mono); color: var(--cyan); border: 1px solid var(--cy
 .title span { display: inline-block; opacity: 0; transform: translateY(.25em); filter: blur(6px);
   animation: letter .7s var(--ease) forwards; }
 @keyframes letter { to { opacity: 1; transform: none; filter: none; } }
-.expand { margin: 6px 0 26px; font: 400 11px var(--mono); letter-spacing: .5em; color: var(--cyan-2);
+.expand { margin: 6px 0 26px; font: 400 13px var(--hud); letter-spacing: .38em; color: var(--cyan-2);
   opacity: 0; animation: fade .8s 1.2s forwards; }
 .intro .expand, .checks, .intro-greet { text-shadow: 0 0 6px #000, 0 0 14px #000; }
 .checks { list-style: none; margin: 0 auto; padding: 0; width: min(440px, 80vw); text-align: left;
-  font: 400 11.5px var(--mono); letter-spacing: .16em; color: var(--muted); }
+  font: 400 13px var(--hud); letter-spacing: .08em; color: var(--muted); }
 .checks li { display: flex; gap: 10px; padding: 3px 0; opacity: 0; animation: fade .35s forwards; }
 .checks li .leader { flex: 1; border-bottom: 1px dotted rgba(95, 227, 255, .22); transform: translateY(-4px); }
 .checks li .ok { color: var(--cyan); } .checks li .warn { color: var(--amber); }
 .intro-greet { min-height: 1.5em; margin: 26px 0 0; font: 300 24px var(--body); color: #fff; opacity: 0; transition: opacity .8s; }
 .intro-greet.on { opacity: 1; }
-.skip { position: fixed; bottom: 28px; left: 0; right: 0; font: 400 10px var(--mono); letter-spacing: .4em; color: rgba(190, 232, 248, .3); }
+.skip { position: fixed; bottom: 28px; left: 0; right: 0; font: 400 12px var(--hud); letter-spacing: .2em; color: rgba(190, 232, 248, .3); }
 @keyframes fade { to { opacity: 1; } }
 
 /* the stage: everything Jarvis says */
 .stage { position: fixed; z-index: 2; left: 53%; right: 5vw; top: 0; bottom: 0; display: flex; flex-direction: column;
   justify-content: safe center; gap: 18px; padding: 92px 0 84px; overflow: hidden; opacity: 1; transition: opacity 1s .5s var(--ease); }
 [data-phase="boot"] .stage { opacity: 0; transition: none; }
-.status { display: flex; align-items: center; gap: 12px; margin: 0; font: 500 11px var(--mono); letter-spacing: .35em; color: var(--cyan-2); }
+.status { display: flex; align-items: center; gap: 12px; margin: 0; font: 500 13px var(--hud); letter-spacing: .22em; color: var(--cyan-2); }
 .status .dot { width: 7px; height: 7px; background: var(--cyan-2); box-shadow: 0 0 10px var(--cyan); }
 [data-mode="armed"] .status, [data-mode="listening"] .status { color: var(--amber); }
 [data-mode="armed"] .status .dot, [data-mode="listening"] .status .dot { background: var(--amber); box-shadow: 0 0 14px var(--amber); animation: blink .9s steps(2) infinite; }
@@ -114,13 +143,13 @@ kbd { font: 500 10px var(--mono); color: var(--cyan); border: 1px solid var(--cy
 .c { position: absolute; width: 18px; height: 18px; border: 2px solid var(--amber); z-index: 1; }
 .c.tl { top: 8px; left: 8px; border-right: 0; border-bottom: 0; } .c.tr { top: 8px; right: 8px; border-left: 0; border-bottom: 0; }
 .c.bl { bottom: 8px; left: 8px; border-right: 0; border-top: 0; } .c.br { bottom: 8px; right: 8px; border-left: 0; border-top: 0; }
-.tag { position: absolute; z-index: 1; top: 14px; left: 34px; font: 500 10.5px var(--mono); letter-spacing: .25em; color: #111; background: var(--amber); padding: 2px 8px; }
+.tag { position: absolute; z-index: 1; top: 14px; left: 34px; font: 500 12px var(--hud); letter-spacing: .14em; color: #111; background: var(--amber); padding: 2px 8px; }
 .reticle { position: absolute; z-index: 1; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px; border: 1px solid rgba(255, 176, 64, .7); border-radius: 50%; }
 .reticle::before, .reticle::after { content: ""; position: absolute; background: rgba(255, 176, 64, .7); }
 .reticle::before { left: 50%; top: -10px; bottom: -10px; width: 1px; } .reticle::after { top: 50%; left: -10px; right: -10px; height: 1px; }
-.evidence figcaption { margin-top: 10px; font: 400 12px var(--mono); letter-spacing: .12em; color: var(--muted); text-transform: uppercase; }
+.evidence figcaption { margin-top: 10px; font: 400 14px var(--hud); color: var(--muted); }
 .cands, .route { display: flex; gap: 10px; margin: 12px 0 0; padding: 0; list-style: none; }
-.cands button, .route li { all: unset; cursor: pointer; width: 112px; font: 400 10px var(--mono); letter-spacing: .08em; color: var(--muted); }
+.cands button, .route li { all: unset; cursor: pointer; width: 112px; font: 400 12px var(--hud); color: var(--muted); }
 .cands img, .route img { display: block; width: 112px; height: 70px; object-fit: cover; outline: 1px solid var(--cyan-3); margin-bottom: 5px; }
 .cands button[aria-pressed="true"] img { outline: 2px solid var(--amber); }
 
@@ -136,7 +165,7 @@ kbd { font: 500 10px var(--mono); color: var(--cyan); border: 1px solid var(--cy
 .qr.big { width: min(56vh, 420px); height: min(56vh, 420px); }
 
 .toast { position: fixed; z-index: 10; left: 50%; bottom: 64px; transform: translateX(-50%); padding: 8px 18px;
-  font: 500 11px var(--mono); letter-spacing: .3em; color: #111; background: var(--cyan); }
+  font: 500 13px var(--hud); letter-spacing: .12em; color: #111; background: var(--cyan); }
 
 @media (prefers-reduced-motion: reduce) {
   .atmos::after { animation: none; } .reactor-wrap { transition: none; }

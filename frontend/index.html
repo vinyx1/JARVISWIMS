@@ -6,16 +6,23 @@
   <meta name="color-scheme" content="dark">
   <title>J.A.R.V.I.S.</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@200;300;400&family=Saira:wght@300;400&family=IBM+Plex+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Saira+Condensed:wght@200;300;400&family=Saira:wght@300;400&family=Chakra+Petch:wght@300;400;500&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="jarvis.css">
 </head>
 <body data-phase="boot" data-mode="idle">
   <!-- Hologram HUD for the projector. D switches to the debug view (debug.html). -->
   <div class="atmos" aria-hidden="true"></div>
 
-  <header class="bar top">
-    <div class="ident"><span class="mark">J.A.R.V.I.S.</span><span class="sub">MK·V &nbsp;/&nbsp; LOST &amp; FOUND PROTOCOL</span></div>
-    <div class="readouts"><span id="roDate"></span><span id="roClock">--:--:--</span></div>
+  <!-- HUD corners instead of full-width bars -->
+  <header class="hud-edge top">
+    <div class="corner tl">
+      <span class="brand">J.A.R.V.I.S.</span>
+      <span class="tagline">Mk V &middot; lost &amp; found protocol</span>
+    </div>
+    <div class="corner tr">
+      <span class="clock"><span id="roClock">--:--</span><small id="roSec">--</small></span>
+      <span id="roDate" class="date"></span>
+    </div>
   </header>
 
   <div class="reactor-wrap" aria-hidden="true"><canvas id="reactor"></canvas></div>
@@ -33,7 +40,7 @@
 
     <div id="idlePanel" class="idle-panel">
       <p id="greeting" class="greeting">Good evening, sir.</p>
-      <p class="hint">Say <em>“Jarvis, …”</em> on the phone, or hold <kbd>Space</kbd> here.</p>
+      <p class="hint">Say <em>“Jarvis, …”</em> on the phone, or hold space here.</p>
       <div id="link" class="link" hidden>
         <img class="qr" data-qr alt="QR code: open the camera page on the iPhone">
         <div>
@@ -63,11 +70,15 @@
     </figure>
   </main>
 
-  <footer class="bar bottom">
-    <div class="keys"><kbd>Space</kbd> talk <kbd>M</kbd> hands-free <kbd>V</kbd> audio <kbd>⏎</kbd> type <kbd>Q</kbd> phone <kbd>D</kbd> debug <kbd>R</kbd> reset</div>
-    <div class="readouts">
-      <span id="roOptics">OPTICS —</span><span id="roMem">MEM 0</span><span id="roItems">ITEMS 0</span>
-      <span id="roMic">MIC · HOLD SPACE</span><span id="roAudio">AUDIO OFF</span>
+  <footer class="hud-edge bottom">
+    <div class="corner bl">
+      <span id="talkHint" class="talk-hint"><span class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="talkText">Hold space to talk</span></span>
+    </div>
+    <div class="corner br gauges">
+      <div class="g"><span id="roOptics" class="v">—</span><span class="l">optics</span></div>
+      <div class="g"><span id="roMem" class="v">000</span><span class="l">frames</span></div>
+      <div class="g"><span id="roItems" class="v">0</span><span class="l">items</span></div>
+      <div class="g"><span id="roAudio" class="v">off</span><span class="l">audio</span></div>
     </div>
   </footer>
 
@@ -80,7 +91,7 @@
     <div class="qr-card">
       <p class="micro">LINK THE SUIT CAMERA</p>
       <img class="qr big" data-qr alt="QR code: open the camera page on the iPhone">
-      <p class="small">Scan with the iPhone camera · <kbd>Q</kbd> to close</p>
+      <p class="small">Scan with the iPhone camera &middot; Q to close</p>
     </div>
   </div>
 

@@ -27,9 +27,7 @@ the key: anyone who scans it while it's up gets in (it hides once the camera fee
 
 `./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
 **Talking to Jarvis:** the phone listens hands-free by default after your first tap (Start
-capture): just say "Jarvis, …", or hold **🎙 Hold to talk**. On the HUD, **hold Space** and speak
-(or press **M** for laptop hands-free; leave it off while the phone listens, or one question is
-heard twice). **Audio:** every device with its audio on speaks every answer. Phone audio is on
+capture): just say "Jarvis, …", or hold **🎙 Hold to talk**. On the HUD, **hold Space** and speak. **Audio:** every device with its audio on speaks every answer. Phone audio is on
 by default (switch on the capture page); laptop audio is off by default (**V**). Speech is
 transcribed on the laptop by Whisper (offline, free); the first run downloads its model (~480 MB).
 
@@ -44,8 +42,8 @@ pulsing while he answers, with the photo of where he saw your item. **D** switch
 view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS) and back.
 The previous HUD is also saved as the git tag `ui-classic`.
 
-HUD keys: **Space** talk · **M** hands-free · **V** laptop audio on/off · **Enter** type a question ·
-**Q** phone QR · **D** debug view · **R** clear memory.
+HUD keys: **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
+**Q** phone QR · **D** debug view · **R** clear memory. Hands-free listening is on the phone.
 
 **Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →
 Manage Voices → English (UK) → download **Daniel (Enhanced)**. Restart `./start`; Jarvis uses it
