@@ -256,6 +256,8 @@ void refreshPhoneLink(); setInterval(refreshPhoneLink,3000);
 setTimeout(()=>{firstExchange=false;},2500);
 showVoiceChip();
 document.body.classList.remove('booting');
+// Any click or key unlocks audio (browsers only allow sound after a gesture), so replies play by themselves.
+for(const ev of ['pointerdown','keydown'])document.addEventListener(ev,()=>speaker.unlock(),{capture:true});
 const typingInField=e=>e.target instanceof HTMLInputElement||e.target instanceof HTMLTextAreaElement||e.target.isContentEditable;
 document.addEventListener('keyup',e=>{if(e.code==='Space'&&!typingInField(e)){e.preventDefault();void talk(false);}});
 window.addEventListener('blur',()=>{mic.hold(false);});   // Space released outside the window

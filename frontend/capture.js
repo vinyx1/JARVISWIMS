@@ -53,7 +53,8 @@ import {createLatestPoller} from './core.js';
 const voiceApi=createApi({timeoutMs:30000});
 let lastReply='';
 const say=text=>{$('phoneVoiceStatus').textContent=text;};
-const speaker=createDeviceSpeaker({onBlocked(){say('Tap "Play reply" to hear Jarvis, or read the answer below.');}});
+// Replies play automatically; "Play reply" only appears if the phone blocked the sound.
+const speaker=createDeviceSpeaker({onBlocked(){$('phoneReplay').hidden=false;say('The phone blocked the sound. Tap "Play reply" to hear Jarvis.');}});
 
 // Phone audio: on by default, remembered on this phone.
 const AUDIO_KEY='jarvisPhoneAudio';
@@ -77,7 +78,7 @@ const states={
 // Questions this phone asked (it speaks those itself), with when: the poll below skips them.
 const askedHere=new Map();
 const mine=q=>{const t=askedHere.get(q);return t!==undefined&&Date.now()-t<30000;};
-function showAnswer(result){lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;}
+function showAnswer(result){lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=true;}
 const mic=createMic({
   onUtterance:(wav,info)=>void convo.handle(wav,info),
   onLevel:level=>{$('phoneLevel').style.width=`${Math.round(level*100)}%`;},
@@ -98,7 +99,8 @@ async function startHandsFree(){
   speaker.unlock(); mic.auto=true;
   try{await mic.start();}catch{/* onState already explained (e.g. denied) */}
 }
-document.addEventListener('pointerdown',()=>void startHandsFree(),{capture:true});
+// Every tap also re-unlocks audio, so a later reply can play by itself.
+document.addEventListener('pointerdown',()=>{speaker.unlock();void startHandsFree();},{capture:true});
 $('phoneHandsFree').onchange=async()=>{
   speaker.unlock();
   if(handsFree()){mic.auto=true;if(mic.on)await mic.resume();else await startHandsFree();say(idle());}
@@ -127,7 +129,7 @@ $('phoneTalk').addEventListener('pointerdown',talkDown);
 for(const ev of ['pointerup','pointercancel','pointerleave'])$('phoneTalk').addEventListener(ev,talkUp);
 $('phoneTalk').addEventListener('contextmenu',e=>e.preventDefault());
 
-$('phoneReplay').onclick=()=>{speaker.unlock();void speaker.play(lastReply);};
+$('phoneReplay').onclick=()=>{$('phoneReplay').hidden=true;speaker.unlock();void speaker.play(lastReply);};
 $('phoneAskForm').onsubmit=async e=>{
   e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
   $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
