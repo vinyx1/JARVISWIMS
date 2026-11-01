@@ -54,9 +54,10 @@ answer model fails, a keyword search over the captions answers instead.
 
 ## GET /interaction
 
-Latest completed phone question and answer for the display-only laptop HUD, or `null`.
-The phone calls `/ask` and plays `/speak` on its own device. The HUD polls this endpoint
-about once a second and displays the question, answer and evidence without recording or speaking.
+The latest completed question and answer, from any device (phone or laptop, voice or typed),
+or `null`. The HUD and the phone both poll it about once a second: the HUD shows it in the chat,
+and every device whose audio switch is on speaks it (phone audio on by default, laptop off).
+The device that asked speaks its own answer straight away and skips it here.
 
 ```json
 { "id": "unique-exchange-id", "question": "Where is my helmet?",

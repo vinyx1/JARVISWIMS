@@ -164,21 +164,20 @@ function showEvidence(result) {
   if (result.kind === 'remember') void refreshMine();
 }
 
-// ---------- Jarvis's voice on the laptop ----------
-// V: also speak answers to phone questions here (Mac speakers / projector). The phone then picks
-// "Jarvis speaks on: The laptop" so the reply isn't heard twice. Typed and laptop-mic questions
-// are always answered out loud here.
+// ---------- Jarvis's voice on the laptop: V switches it on/off (off by default) ----------
+// Every device with its audio on speaks every answer, whoever asked (the phone has its own switch).
 let interactionId=null, firstExchange=true, laptopVoice=false;
-try{laptopVoice=localStorage.getItem('jarvisLaptopVoice')==='1';}catch{}
-function showVoiceChip(){$('micChip').textContent=laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE';$('micChip').classList.toggle('ok',laptopVoice);}
+try{laptopVoice=localStorage.getItem('jarvisLaptopAudio')==='1';}catch{}
+function showVoiceChip(){$('micChip').textContent=laptopVoice?'🔊 LAPTOP AUDIO ON':'LAPTOP AUDIO OFF';$('micChip').classList.toggle('ok',laptopVoice);}
 const speaker=createDeviceSpeaker();
 async function speakOnLaptop(text){
+  if(!laptopVoice)return;
   mic.pause();   // don't let the laptop mic hear Jarvis
   try{await speaker.play(text);}finally{await mic.resume();}
 }
 
 // ---------- laptop microphone: hold Space to talk, M for hands-free "Jarvis, …" ----------
-const spokenHere=new Set();   // questions this page already answered out loud
+const spokenHere=new Set();   // laptop-mic questions: their answer is spoken by the conversation itself
 const earText={off:'MIC · HOLD SPACE',listening:()=>mic.auto?'MIC · SAY "JARVIS…"':'MIC · HOLD SPACE',recording:'● RECORDING',
   thinking:'MIC · THINKING',armed:'MIC · YES, SIR?',speaking:'MIC · SPEAKING','not-heard':'MIC · DIDN\'T CATCH THAT',denied:'MIC BLOCKED',error:'MIC ERROR'};
 function showEar(state){const t=earText[state];if(!t)return;$('earChip').textContent=typeof t==='function'?t():t;
@@ -216,10 +215,9 @@ const interactions=createLatestPoller({
     if(!exchange){interactionId=null;hideEvidence();return;}
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
-    const typedHere=typed.has(exchange.question);typed.delete(exchange.question);
-    const alreadySpoken=spokenHere.has(exchange.question);spokenHere.delete(exchange.question);
-    // never replay an old answer on page load; typed questions are always answered out loud here
-    if((laptopVoice||typedHere)&&!alreadySpoken&&!firstExchange)void speakOnLaptop(exchange.result.answer);
+    const alreadySpoken=spokenHere.has(exchange.question)||convo.busy;spokenHere.delete(exchange.question);
+    // never replay an old answer on page load
+    if(!alreadySpoken&&!firstExchange)void speakOnLaptop(exchange.result.answer);
     firstExchange=false;
     document.querySelectorAll('.line.pending').forEach(line=>line.remove());
     say('you',exchange.question);say('jarvis',exchange.result.answer);
@@ -231,15 +229,14 @@ const interactions=createLatestPoller({
 new ResizeObserver(()=>{$('transcript').scrollTop=$('transcript').scrollHeight;}).observe($('transcript'));
 
 // ---------- chat box: typed questions from the laptop ----------
-const typed=new Set();
 $('askForm').onsubmit=async e=>{
   e.preventDefault();
   const question=$('q').value.trim();
   if(!question||resetting)return;
-  $('q').value='';typed.add(question);speaker.unlock();
+  $('q').value='';speaker.unlock();
   const pending=say('jarvis','Checking the footage, sir…');pending.classList.add('pending');
   try{await api.askQuestion(question);}   // the answer itself arrives via /interaction
-  catch(error){typed.delete(question);pending.classList.remove('pending');pending.textContent=`JARVIS ${error.message}`;}
+  catch(error){pending.classList.remove('pending');pending.textContent=`JARVIS ${error.message}`;}
 };
 
 // ---------- phone link QR: the tunnel URL changes every run, so keep asking ----------
@@ -267,7 +264,8 @@ document.addEventListener('keydown',async e=>{
   const plain=!e.repeat&&!e.metaKey&&!e.ctrlKey&&!e.altKey;
   if(e.code==='Space'){e.preventDefault();if(plain)await talk(true);return;}
   if((e.key==='m'||e.key==='M')&&plain)await toggleHandsFree();
-  if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopVoice',laptopVoice?'1':'0');}catch{}showVoiceChip();toast(laptopVoice?'VOICE ON LAPTOP':'VOICE ON PHONE');}
+  if((e.key==='v'||e.key==='V')&&plain){laptopVoice=!laptopVoice;try{localStorage.setItem('jarvisLaptopAudio',laptopVoice?'1':'0');}catch{}
+    if(laptopVoice)speaker.unlock();else speaker.stop();showVoiceChip();toast(laptopVoice?'LAPTOP AUDIO ON':'LAPTOP AUDIO OFF');}
   if((e.key==='q'||e.key==='Q')&&plain){$('qrOverlay').hidden=!$('qrOverlay').hidden;void refreshPhoneLink();}
   if((e.key==='r'||e.key==='R')&&plain)await reset();
   if(e.key==='Escape'){$('evidence').hidden=true;$('qrOverlay').hidden=true;}

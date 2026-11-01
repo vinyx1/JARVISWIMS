@@ -138,8 +138,8 @@ c 2 "  (the same QR is on the HUD; press Q there to show it big)"
 (( ok )) || c 33 "  (tunnel not answering yet; wait ~30s, then refresh on the phone)"
 printf '%s' "$URL/capture.html" | pbcopy 2>/dev/null && echo "  (copied to clipboard: AirDrop or text it to the phone)"
 echo
-c 2 "  Talk: hold Space on the HUD (M = hands-free), or hold the button on the phone"
-c 2 "  Checklist: iPhone Auto-Lock → Never · ⌃⌘F full screen · Q phone QR · V laptop voice · R clears memory"
+c 2 "  Talk: phone is hands-free (\"Jarvis, …\") after the first tap · HUD: hold Space (M = hands-free)"
+c 2 "  Checklist: iPhone Auto-Lock → Never · ⌃⌘F full screen · Q phone QR · V laptop audio · R clears memory"
 c 2 "  Mac stays awake until Ctrl-C. Logs: data/backend.log, data/tunnel.log"
 echo
 

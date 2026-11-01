@@ -43,40 +43,67 @@ const preview=createPreviewSender({
  canSend:()=>loop.running&&!document.hidden
 });
 
-// ---------- voice: hold to talk, or hands-free "Jarvis, …" ----------
+// ---------- voice: hands-free "Jarvis, …" (on by default), or hold to talk ----------
 // Audio is recorded here (mic.js) and transcribed on the laptop by Whisper (POST /listen).
+// Every device with its audio switched on speaks every answer, whoever asked.
 import {createMic} from './mic.js';
 import {createConversation} from './listen.js';
 import {createDeviceSpeaker} from './speaker.js';
+import {createLatestPoller} from './core.js';
 const voiceApi=createApi({timeoutMs:30000});
 let lastReply='';
 const say=text=>{$('phoneVoiceStatus').textContent=text;};
 const speaker=createDeviceSpeaker({onBlocked(){say('Tap "Play reply" to hear Jarvis, or read the answer below.');}});
-const OUTPUT_KEY='jarvisOutput';
-try{const saved=localStorage.getItem(OUTPUT_KEY);if(saved)$('phoneOutput').value=saved;}catch{}
-$('phoneOutput').onchange=()=>{try{localStorage.setItem(OUTPUT_KEY,$('phoneOutput').value);}catch{}};
-const onLaptop=()=>$('phoneOutput').value==='laptop';
+
+// Phone audio: on by default, remembered on this phone.
+const AUDIO_KEY='jarvisPhoneAudio';
+try{if(localStorage.getItem(AUDIO_KEY)==='0')$('phoneAudio').checked=false;}catch{}
+$('phoneAudio').onchange=()=>{try{localStorage.setItem(AUDIO_KEY,$('phoneAudio').checked?'1':'0');}catch{}if($('phoneAudio').checked)speaker.unlock();else speaker.stop();};
+const audioOn=()=>$('phoneAudio').checked;
+async function speakHere(text){
+  if(!audioOn())return;
+  mic.pause();   // don't hear ourselves; also keeps iPhone audio on the loudspeaker
+  try{await speaker.play(text);}finally{await mic.resume();}
+}
+
 const handsFree=()=>$('phoneHandsFree').checked;
-const idle=()=>handsFree()?'Hands-free: say "Jarvis, …" (or hold the button).':'Hold the button and speak, or turn on hands-free.';
+const idle=()=>handsFree()?(mic.on?'Listening: say "Jarvis, …" (or hold the button).':'Tap anywhere to start listening for "Jarvis, …".'):'Hold the button and speak, or turn on hands-free.';
 const states={
   listening:idle, recording:()=>'Listening… let go when you\'re done.', thinking:()=>'Checking the footage…',
-  armed:()=>'Yes, sir? Go ahead.', speaking:()=>onLaptop()?'Jarvis is replying on the laptop.':'Jarvis is replying.',
-  'not-heard':()=>'I didn\'t catch that. Hold the button and try again.', denied:()=>'Microphone blocked. Allow it in Settings → Safari → Microphone, then reload.',
+  armed:()=>'Yes, sir? Go ahead.', speaking:()=>audioOn()?'Jarvis is replying.':'Answer below (phone audio is off).',
+  'not-heard':()=>'I didn\'t catch that. Try again.', denied:()=>'Microphone blocked. Allow it in Settings → Safari → Microphone, then reload.',
   error:()=>'Something went wrong. Try again.', off:idle,
 };
+// Questions this phone asked (it speaks those itself), with when: the poll below skips them.
+const askedHere=new Map();
+const mine=q=>{const t=askedHere.get(q);return t!==undefined&&Date.now()-t<30000;};
+function showAnswer(result){lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;}
 const mic=createMic({
   onUtterance:(wav,info)=>void convo.handle(wav,info),
   onLevel:level=>{$('phoneLevel').style.width=`${Math.round(level*100)}%`;},
   onState:s=>{if(states[s])say(states[s]());},
 });
 const convo=createConversation({
-  listen:(wav,mode)=>voiceApi.listen(wav,mode), mic,
-  speak:text=>onLaptop()?Promise.resolve():speaker.play(text),   // the laptop HUD speaks it itself
+  listen:(wav,mode)=>voiceApi.listen(wav,mode), mic, speak:speakHere,
   onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
   onHeard:text=>{$('phoneHeard').textContent=`You: ${text}`;},
-  onAnswer:result=>{lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
+  onAnswer:(result,question)=>{askedHere.set(question,Date.now());showAnswer(result);},
   onError:error=>{$('phoneAnswer').textContent=error.message;},
 });
+
+// Hands-free needs one tap first (iPhone only opens the mic from a tap): Start capture,
+// the switch, or a tap anywhere on the page.
+async function startHandsFree(){
+  if(!handsFree()||mic.on||!navigator.mediaDevices?.getUserMedia)return;
+  speaker.unlock(); mic.auto=true;
+  try{await mic.start();}catch{/* onState already explained (e.g. denied) */}
+}
+document.addEventListener('pointerdown',()=>void startHandsFree(),{capture:true});
+$('phoneHandsFree').onchange=async()=>{
+  speaker.unlock();
+  if(handsFree()){mic.auto=true;if(mic.on)await mic.resume();else await startHandsFree();say(idle());}
+  else{mic.auto=false;convo.cancel();mic.stop();}
+};
 
 // Hold to talk: press = record, release = send. Works with hands-free on or off.
 async function talkDown(e){
@@ -100,21 +127,38 @@ $('phoneTalk').addEventListener('pointerdown',talkDown);
 for(const ev of ['pointerup','pointercancel','pointerleave'])$('phoneTalk').addEventListener(ev,talkUp);
 $('phoneTalk').addEventListener('contextmenu',e=>e.preventDefault());
 
-$('phoneHandsFree').onchange=async()=>{
-  speaker.unlock();
-  if(handsFree()){mic.auto=true;try{await mic.start();}catch{$('phoneHandsFree').checked=false;mic.auto=false;}}
-  else{mic.auto=false;convo.cancel();mic.stop();}
-};
 $('phoneReplay').onclick=()=>{speaker.unlock();void speaker.play(lastReply);};
 $('phoneAskForm').onsubmit=async e=>{
   e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
   $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
-  try{const result=await voiceApi.askQuestion(question);lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;
-    say(states.speaking());if(!onLaptop()){mic.pause();await speaker.play(result.answer);await mic.resume();}}
-  catch(error){$('phoneAnswer').textContent=error.message;}
+  askedHere.set(question,Date.now());
+  try{const result=await voiceApi.askQuestion(question);showAnswer(result);say(states.speaking());await speakHere(result.answer);}
+  catch(error){askedHere.delete(question);$('phoneAnswer').textContent=error.message;}
   say(idle());
 };
+
+// Answers to questions asked elsewhere (the laptop's mic or chat box): show them, and speak
+// them here too if phone audio is on. Never replay an answer that existed before this page loaded.
+let seenExchange=null, firstPoll=true;
+const exchanges=createLatestPoller({
+  load:()=>voiceApi.getInteraction(),
+  onUpdate(exchange){
+    const first=firstPoll; firstPoll=false;
+    if(!exchange||exchange.id===seenExchange)return;
+    seenExchange=exchange.id;
+    if(first)return;
+    // Ours (or ours still in flight: /listen's reply can land after this poll): we speak it ourselves.
+    if(mine(exchange.question)||convo.busy)return;
+    $('phoneHeard').textContent=`Laptop: ${exchange.question}`;showAnswer(exchange.result);
+    if(!convo.busy)void speakHere(exchange.result.answer);
+  },
+  onError(){/* the next poll retries */},
+});
+exchanges.start();
+
 if(!navigator.mediaDevices?.getUserMedia){$('phoneTalk').disabled=true;$('phoneHandsFree').disabled=true;say('The microphone needs HTTPS. Open the link from the laptop\'s QR code.');}
-function hush(){convo.cancel();speaker.stop();mic.stop();$('phoneHandsFree').checked=false;mic.auto=false;}
+else say(idle());
+// Page hidden: release the mic. Hands-free stays switched on and restarts on the next tap.
+function hush(){convo.cancel();speaker.stop();mic.stop();say(idle());}
 document.addEventListener('visibilitychange',()=>{if(document.hidden)hush();});
-window.addEventListener('pagehide',hush);
+window.addEventListener('pagehide',()=>{hush();exchanges.stop();});
