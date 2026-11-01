@@ -69,7 +69,14 @@ camera sees now, describes the spot, and records it as that item's last-seen loc
 The latest completed question and answer, from any device (phone or laptop, voice or typed),
 or `null`. The HUD and the phone both poll it about once a second: the HUD shows it in the chat,
 and every device whose audio switch is on speaks it (phone audio on by default, laptop off).
-The device that asked speaks its own answer straight away and skips it here.
+Each exchange carries `source`: the random per-page id of the device that asked (sent as `source`
+with `/listen`, or with `/ask` for the asking device's own typed questions; `null` otherwise). A
+device skips only exchanges whose `source` is its own id, because it already spoke those itself.
+
+## POST /client-log
+
+`{"event": "played", "detail": "media"}`: the phone reports how each reply played (media player,
+Web Audio, browser voice) or why it failed, into `data/backend.log` as `phone audio: ...`.
 
 ```json
 { "id": "unique-exchange-id", "question": "Where is my helmet?",

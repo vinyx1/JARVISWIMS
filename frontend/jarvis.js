@@ -2,7 +2,7 @@
 // (hold Space to talk through the laptop mic; hands-free listening lives on the phone)
 // on the right. He reacts like Siri: "Jarvis" (phone or laptop) locks the rings amber, a question
 // spins them up, his answer pulses them. D switches to the debug view (debug.html).
-import {createApi} from './api.js';
+import {createApi, clientId} from './api.js';
 import {formatSeenAt, safeFrameUrl} from './core.js';
 import {createMic} from './mic.js';
 import {createConversation} from './listen.js';
@@ -105,7 +105,6 @@ function answer(exchange, {speak}) {
 }
 
 // ---------- the laptop's own mic: hold Space to talk ----------
-const spokenHere = new Set();
 const TALK = {off: 'Hold space to talk', listening: 'Hold space to talk', recording: 'Listening \u2014 let go to send',
               denied: 'Microphone blocked \u2014 allow it in Chrome', error: 'Microphone error'};
 const mic = createMic({
@@ -120,7 +119,7 @@ const convo = createConversation({
   listen: (wav, mode) => api.listen(wav, mode), mic, speak: speakOnLaptop,
   onState: s => { if (s === 'thinking') setMode('thinking'); else if (s === 'armed') setMode('armed'); else if (s === 'not-heard' || s === 'error') setMode('idle'); },
   onHeard: text => { if (mode !== 'speaking') showQuestion(text); },
-  onAnswer: (result, question) => spokenHere.add(question),
+  onAnswer: () => {},
   onError: () => toast('VOICE FAILED'),
 });
 async function talk(down) {
@@ -164,7 +163,7 @@ async function checkExchange() {
     if (ex.id === exchangeId) return;
     exchangeId = ex.id;
     if (first) return;   // never replay an answer from before this page loaded
-    const already = spokenHere.delete(ex.question) || convo.busy;
+    const already = ex.source === clientId;   // the laptop's own mic question: its conversation speaks it
     answer(ex, {speak: !already});
   } catch { /* next poll */ }
 }

@@ -106,6 +106,7 @@ async def frame(
 
 class Ask(BaseModel):
     question: str
+    source: str | None = None   # which device asked (a random id per page); that device speaks its own reply
 
 
 # ---------- "this is my laptop, remember it" ----------
@@ -325,7 +326,7 @@ async def ask(body: Ask):
         result = await _answer_request(body)
         with _interaction_lock:
             if generation == _exchange_generation:
-                _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result}
+                _exchange = {"id": uuid.uuid4().hex, "question": body.question, "result": result, "source": body.source}
         _set_activity("answered", body.question)
         return result
     finally:
@@ -362,7 +363,7 @@ async def still(image: UploadFile = File(...)):
 
 @app.post("/listen")
 async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: UploadFile | None = File(None),
-                 can_send_still: bool = Form(False)):
+                 can_send_still: bool = Form(False), source: str | None = Form(None)):
     """One spoken utterance (16 kHz WAV from frontend/mic.js) -> what was heard, and Jarvis's answer.
 
     mode "ask":  everything said is the question (push-to-talk, or right after "Jarvis" alone).
@@ -397,8 +398,21 @@ async def listen(audio: UploadFile = File(...), mode: str = Form("ask"), still: 
     if can_send_still is True and not hasattr(still, "read") and (place_item(question) or remember_item(question)):
         reply["need_still"] = True   # "remember this": get a sharp photo first
         return reply
-    reply["result"] = await ask(Ask(question=question))
+    reply["result"] = await ask(Ask(question=question, source=source if isinstance(source, str) else None))
     return reply
+
+
+class ClientLog(BaseModel):
+    event: str
+    detail: str = ""
+
+
+@app.post("/client-log")
+def client_log(body: ClientLog):
+    """The phone reports how it played (or failed to play) Jarvis's voice, so intermittent silence
+    shows up in data/backend.log instead of being a mystery."""
+    log.info("phone audio: %s %s", body.event[:40], body.detail[:200])
+    return {"ok": True}
 
 
 @app.get("/interaction")

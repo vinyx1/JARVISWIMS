@@ -169,3 +169,22 @@ def test_activity_follows_the_conversation(monkeypatch):
     assert main.activity()["state"] == "armed"
     main._activity["ts"] -= 100
     assert main.activity()["state"] == "idle"   # "armed" expires
+
+
+def test_answers_remember_which_device_asked(monkeypatch):
+    monkeypatch.setattr(main, "_answer_request", AsyncMock(return_value={"answer": "x", "kind": "other", "frames": []}))
+    asyncio.run(main.ask(main.Ask(question="where is my mug", source="phone-123")))
+    assert main.interaction()["source"] == "phone-123"
+    asyncio.run(main.ask(main.Ask(question="typed on the laptop")))
+    assert main.interaction()["source"] is None
+
+
+def test_spoken_questions_carry_the_device_id(monkeypatch):
+    monkeypatch.setattr(stt, "transcribe", lambda data: "Jarvis, where is my mug?")
+    seen = {}
+    async def fake_ask(body):
+        seen["source"] = body.source
+        return {"answer": "x", "kind": "other", "frames": []}
+    monkeypatch.setattr(main, "ask", fake_ask)
+    asyncio.run(main.listen(audio=Upload(), mode="wake", source="phone-abc"))
+    assert seen["source"] == "phone-abc"

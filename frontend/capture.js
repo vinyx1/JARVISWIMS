@@ -1,4 +1,4 @@
-import {createApi} from './api.js';
+import {createApi,clientId} from './api.js';
 import {createCameraController,listCameras,captureFrame} from './camera.js';
 import {createCaptureLoop} from './core.js';
 import {createPreviewSender} from './preview.js';
@@ -55,7 +55,11 @@ const voiceApi=createApi({timeoutMs:30000});
 let lastReply='';
 const say=text=>{$('phoneVoiceStatus').textContent=text;};
 // Replies play automatically; "Play reply" only appears if the phone blocked the sound.
-const speaker=createDeviceSpeaker({onBlocked(){$('phoneReplay').hidden=false;say('The phone blocked the sound. Tap "Play reply" to hear Jarvis.');}});
+const speaker=createDeviceSpeaker({
+  onBlocked(){$('phoneReplay').hidden=false;say('The phone blocked the sound. Tap "Play reply" to hear Jarvis.');},
+  // how each reply played (or why not) goes to the laptop's log: data/backend.log, "phone audio: ..."
+  onEvent:(event,detail)=>{fetch('/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,detail})}).catch(()=>{});},
+});
 
 // Phone audio: on by default, remembered on this phone.
 const AUDIO_KEY='jarvisPhoneAudio';
@@ -76,9 +80,7 @@ const states={
   'not-heard':()=>'I didn\'t catch that. Try again.', denied:()=>'Microphone blocked. Allow it in Settings → Safari → Microphone, then reload.',
   error:()=>'Something went wrong. Try again.', off:idle,
 };
-// Questions this phone asked (it speaks those itself), with when: the poll below skips them.
-const askedHere=new Map();
-const mine=q=>{const t=askedHere.get(q);return t!==undefined&&Date.now()-t<30000;};
+
 function showAnswer(result){lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=true;}
 const mic=createMic({
   onUtterance:(wav,info)=>void convo.handle(wav,info),
@@ -94,11 +96,11 @@ async function sharpStill(){
 const convo=createConversation({
   // Audio only; a photo is sent only when the laptop asks for one ("this is my X, remember it").
   listen:(wav,mode)=>voiceApi.listen(wav,mode,!!camera.stream),
-  async askWithPhoto(question){const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});return voiceApi.askQuestion(question);},
+  async askWithPhoto(question){const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});return voiceApi.askQuestion(question,{mine:true});},
   mic, speak:speakHere,
   onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
   onHeard:text=>{$('phoneHeard').textContent=`You: ${text}`;},
-  onAnswer:(result,question)=>{askedHere.set(question,Date.now());showAnswer(result);},
+  onAnswer:result=>showAnswer(result),
   onError:error=>{$('phoneAnswer').textContent=error.message;},
 });
 
@@ -149,10 +151,9 @@ $('phoneReplay').onclick=()=>{$('phoneReplay').hidden=true;speaker.unlock();void
 $('phoneAskForm').onsubmit=async e=>{
   e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
   $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
-  askedHere.set(question,Date.now());
   try{const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});
-    const result=await voiceApi.askQuestion(question);showAnswer(result);say(states.speaking());await speakHere(result.answer);}
-  catch(error){askedHere.delete(question);$('phoneAnswer').textContent=error.message;}
+    const result=await voiceApi.askQuestion(question,{mine:true});showAnswer(result);say(states.speaking());await speakHere(result.answer);}
+  catch(error){$('phoneAnswer').textContent=error.message;}
   say(idle());
 };
 
@@ -166,10 +167,11 @@ const exchanges=createLatestPoller({
     if(!exchange||exchange.id===seenExchange)return;
     seenExchange=exchange.id;
     if(first)return;
-    // Ours (or ours still in flight: /listen's reply can land after this poll): we speak it ourselves.
-    if(mine(exchange.question)||convo.busy)return;
+    // This phone's own question: it speaks that reply itself. Anything else (the laptop's mic or
+    // chat box) is spoken here too, even while the mic is busy hearing chatter.
+    if(exchange.source===clientId)return;
     $('phoneHeard').textContent=`Laptop: ${exchange.question}`;showAnswer(exchange.result);
-    if(!convo.busy)void speakHere(exchange.result.answer);
+    void speakHere(exchange.result.answer);
   },
   onError(){/* the next poll retries */},
 });

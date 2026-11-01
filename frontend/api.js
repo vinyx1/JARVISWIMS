@@ -1,3 +1,7 @@
+// One id per open page: answers to this page's own questions come back tagged with it, so the page
+// knows to speak those itself and other devices know they're someone else's.
+export const clientId = globalThis.crypto?.randomUUID?.() || `c${Math.random().toString(36).slice(2)}${Date.now().toString(36)}`;
+
 export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}={}) {
   async function request(path,init={},check=()=>true) {
     const controller=new AbortController(), timer=setTimeout(()=>controller.abort(),timeoutMs);
@@ -24,8 +28,9 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
     // One spoken utterance (16 kHz WAV from mic.js) -> {heard, question, armed, result}. See POST /listen.
     // still: optional sharp photo of what the camera sees now ("remember this" uses it).
     // canSendStill: this device has a camera; the reply may then ask for a photo (need_still).
-    listen(wav,mode='ask',canSendStill=false) {const body=new FormData();body.append('audio',new Blob([wav],{type:'audio/wav'}),'utterance.wav');body.append('mode',mode);if(canSendStill)body.append('can_send_still','true');return request('/listen',{method:'POST',body},x=>typeof x?.heard==='string'&&typeof x.armed==='boolean'&&(x.result===null||typeof x.result?.answer==='string'));},
-    askQuestion(question) {return json('/ask',{question},x=>typeof x?.answer==='string'&&['find','retrace','remember','other'].includes(x.kind)&&Array.isArray(x.frames));},
+    listen(wav,mode='ask',canSendStill=false) {const body=new FormData();body.append('audio',new Blob([wav],{type:'audio/wav'}),'utterance.wav');body.append('mode',mode);body.append('source',clientId);if(canSendStill)body.append('can_send_still','true');return request('/listen',{method:'POST',body},x=>typeof x?.heard==='string'&&typeof x.armed==='boolean'&&(x.result===null||typeof x.result?.answer==='string'));},
+    // mine: tag the answer as this page's (the page then speaks it itself, not via /interaction)
+    askQuestion(question,{mine=false}={}) {return json('/ask',mine?{question,source:clientId}:{question},x=>typeof x?.answer==='string'&&['find','retrace','remember','other'].includes(x.kind)&&Array.isArray(x.frames));},
     getInteraction:()=>request('/interaction',{cache:'no-store'},x=>x===null||(typeof x.id==='string'&&typeof x.question==='string'&&typeof x.result?.answer==='string'&&Array.isArray(x.result.frames))),
     getMine:()=>request('/mine',{},x=>Array.isArray(x)&&x.every(item=>typeof item.item==='string'&&typeof item.description==='string'&&typeof item.frame_id==='string'&&typeof item.url==='string'&&Number.isFinite(item.ts))),
     uploadPreview(blob,ts,signal){const body=new FormData();body.append('image',blob,'preview.jpg');body.append('ts',String(ts));return request('/preview',{method:'POST',body,signal},x=>x?.ok===true);},

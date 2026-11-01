@@ -1,19 +1,20 @@
 // Jarvis's voice on this device: POST /speak returns audio (ElevenLabs if configured, else the
 // Mac's British "say" voice), played automatically. play() resolves when Jarvis stops talking.
 //
-// iPhone only plays audio that a tap has unlocked, and microphone changes can suspend Web Audio.
-// So playback tries, in order:
-//   1. Web Audio, resuming the context if iOS suspended it
-//   2. an <audio> element that was unlocked by the first tap (survives mic changes)
+// iPhone only plays audio that a tap has unlocked. Playback tries, in order:
+//   1. an <audio> element unlocked by a tap: the phone's media player, which ignores the silent
+//      switch and survives mic changes
+//   2. Web Audio (muted by the silent switch on iPhone, so only a fallback)
 //   3. the browser's own en-GB voice
-// and only then calls onBlocked (the page shows "Play reply").
+// and only then calls onBlocked (the page shows "Play reply"). onEvent reports which path played
+// or why it failed, so intermittent silence can be diagnosed from the server log.
 import {encodeWav} from './mic.js';
 
 const SILENCE = URL.createObjectURL?.(new Blob([encodeWav(new Float32Array(800))], {type: 'audio/wav'}));
 
-export function createDeviceSpeaker({onBlocked = () => {}, fetchImpl = (...a) => fetch(...a)} = {}) {
+export function createDeviceSpeaker({onBlocked = () => {}, onEvent = () => {}, fetchImpl = (...a) => fetch(...a)} = {}) {
   let context = null, source = null, controller = null, generation = 0, settle = null, speechTimer = null;
-  let element = null, elementUnlocked = false, elementUrl = null;
+  let element = null, elementUnlocked = false, elementUrl = null, elementBusy = false;
 
   /** Call from every tap/keypress: (re)unlocks both players while we have the user's gesture. */
   function unlock() {
@@ -29,7 +30,8 @@ export function createDeviceSpeaker({onBlocked = () => {}, fetchImpl = (...a) =>
     } catch { /* fall through to the element */ }
     try {
       if (!element && typeof Audio !== 'undefined') { element = new Audio(); element.setAttribute('playsinline', ''); }
-      if (element && !elementUnlocked && SILENCE) {
+      // never swap a reply that is playing for the silent unlock clip
+      if (element && !elementUnlocked && !elementBusy && SILENCE) {
         element.src = SILENCE;
         element.play().then(() => { elementUnlocked = true; }).catch(() => {});
       }
@@ -41,6 +43,7 @@ export function createDeviceSpeaker({onBlocked = () => {}, fetchImpl = (...a) =>
     try { source?.stop(); } catch {}
     source = null;
     try { element?.pause(); } catch {}
+    elementBusy = false;
     window.speechSynthesis?.cancel(); clearTimeout(speechTimer);
     settle?.(); settle = null;
   }
@@ -63,15 +66,19 @@ export function createDeviceSpeaker({onBlocked = () => {}, fetchImpl = (...a) =>
   }
 
   async function viaElement(bytes, type, token) {
-    if (!element) return false;
+    if (typeof Audio === 'undefined') return false;
+    element ??= new Audio(); element.setAttribute('playsinline', '');
     if (elementUrl) URL.revokeObjectURL(elementUrl);
     elementUrl = URL.createObjectURL(new Blob([bytes], {type}));
-    element.src = elementUrl;
-    try { await element.play(); } catch { return false; }
-    if (token !== generation) { element.pause(); return true; }
+    elementBusy = true; element.src = elementUrl;
+    try { await element.play(); } catch (err) { elementBusy = false; onEvent('element-failed', err?.name || String(err)); return false; }
+    elementUnlocked = true;   // it played, so it's unlocked from now on
+    if (token !== generation) { element.pause(); elementBusy = false; return true; }
     await new Promise(resolve => {
       settle = resolve;
-      const done = () => { element.onended = element.onerror = null; if (token === generation) settle = null; resolve(); };
+      // ended can be missed on iOS: give up waiting a little after the clip's length
+      const guard = setTimeout(() => done(), ((element.duration || 20) + 2) * 1000);
+      function done() { clearTimeout(guard); element.onended = element.onerror = null; elementBusy = false; if (token === generation) settle = null; resolve(); }
       element.onended = done; element.onerror = done;
     });
     return true;
@@ -104,14 +111,15 @@ export function createDeviceSpeaker({onBlocked = () => {}, fetchImpl = (...a) =>
       if (response.ok && type.startsWith('audio/')) bytes = await response.arrayBuffer();
     } catch {} finally { clearTimeout(timer); }
     if (token !== generation) return;
+    if (!bytes) onEvent('no-audio-from-laptop', 'falling back to the browser voice');
     if (bytes) {
-      try { if (await viaWebAudio(bytes, token)) return; } catch {}
+      try { if (await viaElement(bytes, type, token)) { onEvent('played', 'media'); return; } } catch {}
       if (token !== generation) return;
-      try { if (await viaElement(bytes, type, token)) return; } catch {}
+      try { if (await viaWebAudio(bytes, token)) { onEvent('played', 'webaudio'); return; } } catch (err) { onEvent('webaudio-failed', err?.name || ''); }
       if (token !== generation) return;
     }
-    if (await viaBrowserVoice(text, token)) return;
-    if (token === generation) onBlocked();
+    if (await viaBrowserVoice(text, token)) { onEvent('played', 'browser-voice'); return; }
+    if (token === generation) { onEvent('blocked', 'every playback path refused'); onBlocked(); }
   }
 
   return {unlock, stop, play};

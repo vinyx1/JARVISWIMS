@@ -1,7 +1,7 @@
 // Laptop HUD: live feed (GET /latest + /preview.jpg) and the COMMS side panel.
 // The phone asks by voice; the chat box here asks by typing. Every completed exchange,
 // from either, arrives through GET /interaction and is shown in the chat.
-import { createApi } from './api.js';
+import { createApi, clientId } from './api.js';
 import { createLatestPoller, formatSeenAt, safeFrameUrl } from './core.js';
 import { createMic } from './mic.js';
 import { createConversation } from './listen.js';
@@ -180,7 +180,6 @@ async function speakOnLaptop(text){
 }
 
 // ---------- laptop microphone: hold Space to talk, M for hands-free "Jarvis, …" ----------
-const spokenHere=new Set();   // laptop-mic questions: their answer is spoken by the conversation itself
 const earText={off:'MIC · HOLD SPACE',listening:()=>mic.auto?'MIC · SAY "JARVIS…"':'MIC · HOLD SPACE',recording:'● RECORDING',
   thinking:'MIC · THINKING',armed:'MIC · YES, SIR?',speaking:'MIC · SPEAKING','not-heard':'MIC · DIDN\'T CATCH THAT',denied:'MIC BLOCKED',error:'MIC ERROR'};
 function showEar(state){const t=earText[state];if(!t)return;$('earChip').textContent=typeof t==='function'?t():t;
@@ -190,7 +189,7 @@ const convo=createConversation({
   listen:(wav,mode)=>api.listen(wav,mode), mic, speak:speakOnLaptop,
   onState:showEar,
   onHeard:text=>{$('heard').textContent=`Heard: “${text}”`;},
-  onAnswer:(result,question)=>spokenHere.add(question),   // shown in the chat via /interaction
+  onAnswer:()=>{},   // shown in the chat via /interaction
   onError:error=>toast(error.status===503?'SPEECH RECOGNITION UNAVAILABLE':'VOICE FAILED'),
 });
 async function talk(down){
@@ -218,7 +217,7 @@ const interactions=createLatestPoller({
     if(!exchange){interactionId=null;hideEvidence();return;}
     if(exchange.id===interactionId)return;
     interactionId=exchange.id;
-    const alreadySpoken=spokenHere.has(exchange.question)||convo.busy;spokenHere.delete(exchange.question);
+    const alreadySpoken=exchange.source===clientId;   // this page's own mic question: already spoken
     // never replay an old answer on page load
     if(!alreadySpoken&&!firstExchange)void speakOnLaptop(exchange.result.answer);
     firstExchange=false;
