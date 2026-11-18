@@ -1,4 +1,4 @@
-# J.A.R.V.I.S. — Halloween hackathon (project name TBD)
+# JARVIS: Where Is My Stuff? (JARVISWIMS) — Halloween hackathon
 
 Halloween hackathon, Oct 31 2026, **10:00am to 3:00pm**. The theme is a Halloween
 character. Ours is **Jarvis from Iron Man**: you're dressed as Iron Man, and
@@ -9,6 +9,8 @@ captions each frame. On the laptop (on the projector), a Jarvis heads-up display
 shows what the phone sees in near-real time. You say **"Jarvis, where did I leave
 my helmet?"** and Jarvis answers in a British voice, shows the photo where the
 item was, and walks you back past the landmarks.
+
+Devpost: https://devpost.com/software/jarvis-where-is-my-stuff
 
 Read `API.md` for the frontend/backend contract and `README.md` for setup.
 
@@ -154,7 +156,6 @@ photos of the demo route, in walking order (`01.jpg`…), and
 
 ## Still undecided
 
-- Project/submission name. Candidates: "Jarvis, Where's My Helmet?", "J.A.R.V.I.S. Lost & Found Protocol".
 - Is there a better mic than the laptop's built-in one (wired earbuds with a mic)?
 
 ## Git rules
