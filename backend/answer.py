@@ -8,7 +8,9 @@ If the model call fails (no key, network, refusal, bad JSON), a keyword search o
 the captions answers instead, so the live demo still finds the helmet. If that finds
 nothing, it returns ERROR_REPLY (CLAUDE.md integration rule 3).
 """
+import contextvars
 import logging
+import os
 import re
 import time
 from concurrent.futures import ThreadPoolExecutor
@@ -18,11 +20,13 @@ from typing import Literal
 import anthropic
 from pydantic import BaseModel
 
+import budget
+
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 ANSWER_MODEL = "claude-sonnet-5-5"  # switch to "claude-haiku-5-5" if /ask takes > 5s
 ANSWER_EFFORT = "low"
 MAX_TOKENS = 2000
-MAX_LOG_ENTRIES = 200
+MAX_LOG_ENTRIES = int(os.getenv("JARVIS_MAX_LOG_ENTRIES", "200"))   # captions sent per answer (cost)
 # One attempt, no retry, well inside main.py's 12s /ask limit, so a slow or failed call still
 # leaves time for the keyword fallback instead of the "taking longer than expected" reply.
 API_TIMEOUT_S = 8
@@ -152,6 +156,7 @@ def _ask_model(question: str, entries: list[dict], now_ms: float, mine=()) -> An
         f"{_format_log(entries, now_ms)}\n\n"
         f"Question: {question}"
     )
+    budget.check()
     response = _get_client().messages.create(
         model=ANSWER_MODEL,
         max_tokens=MAX_TOKENS,
@@ -159,6 +164,7 @@ def _ask_model(question: str, entries: list[dict], now_ms: float, mine=()) -> An
         messages=[{"role": "user", "content": user_text}],
         output_config={"effort": ANSWER_EFFORT, "format": {"type": "json_schema", "schema": OUTPUT_SCHEMA}},
     )
+    budget.charge(ANSWER_MODEL, response)
     if response.stop_reason == "refusal":
         logger.warning("answer model refused: %r", question)
         return None
@@ -282,7 +288,8 @@ def answer(question: str, log: list[dict], mine: list[dict] = (), look=None) -> 
     item = asked_item(question, mine)
     recheck = frames_since_sighting(item, entries) if item and look else []
     pool = ThreadPoolExecutor(max_workers=1) if recheck else None
-    second_look = pool.submit(look, item, recheck) if pool else None
+    # copy_context: the second look must read the same visitor's photos (store.current()).
+    second_look = pool.submit(contextvars.copy_context().run, look, item, recheck) if pool else None
     try:
         try:
             out = _ask_model(question, entries, now_ms, mine)

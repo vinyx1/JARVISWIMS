@@ -29,8 +29,8 @@ class Upload:
     def __init__(self, data=b"RIFF"):
         self.data = data
 
-    async def read(self):
-        return self.data
+    async def read(self, size=-1):
+        return self.data if size < 0 else self.data[:size]
 
 
 def run_listen(monkeypatch, heard, mode, **extra):

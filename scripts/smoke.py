@@ -63,8 +63,12 @@ with httpx.Client(base_url=args.url, timeout=60) as c:
     ids = []
     for img in images:
         mime = "image/png" if img.suffix.lower() == ".png" else "image/jpeg"
-        r = c.post("/frame", files={"image": (img.name, img.read_bytes(), mime)},
-                   data={"ts": str(time.time() * 1000)})
+        for _ in range(10):   # a public deployment rate-limits photos: wait as told, then retry
+            r = c.post("/frame", files={"image": (img.name, img.read_bytes(), mime)},
+                       data={"ts": str(time.time() * 1000)})
+            if r.status_code != 429:
+                break
+            time.sleep(float(r.headers.get("retry-after", "2")))
         if check(r.status_code == 200 and "id" in r.json(), f"POST /frame {img.name}"):
             ids.append(r.json()["id"])
 

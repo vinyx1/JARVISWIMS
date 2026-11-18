@@ -58,6 +58,13 @@ HUD keys (also listed under **Commands**, or press **?**): **H** walkthrough · 
 Manage Voices → English (UK) → download **Daniel (Enhanced)**. Restart `./start`; Jarvis uses it
 automatically.
 
+## Put it online (Railway)
+
+Anyone can try it from their own laptop and phone, with no tunnel and no Mac running: push this
+repo to Railway and it builds the `Dockerfile` in **public mode**. Each visitor gets a private
+session, with rate limits, upload caps and a $2/day AI budget. Setup steps and every protection:
+**[DEPLOY.md](DEPLOY.md)**.
+
 ## Manual setup (development)
 
 ```bash

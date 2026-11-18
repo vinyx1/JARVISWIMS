@@ -20,6 +20,8 @@ from pathlib import Path
 import anthropic
 from pydantic import BaseModel
 
+import budget
+
 PROMPTS = Path(__file__).resolve().parent.parent / "prompts"
 CAPTION_MODEL = "claude-haiku-5-5"
 UNCLEAR = {"scene": "unclear frame", "room_guess": "unknown", "objects": [], "landmarks": []}
@@ -33,6 +35,9 @@ last_error: str | None = None
 
 def _failed(what: str, err: Exception) -> None:
     global last_error
+    if isinstance(err, budget.OverBudget):   # not a broken key: the daily cap did its job
+        log.info("%s skipped: %s", what, err)
+        return
     last_error = f"{type(err).__name__}: {getattr(err, 'message', None) or err}"[:200]
     log.error("%s failed: %s", what, last_error)
 
@@ -42,6 +47,14 @@ def _client_() -> anthropic.Anthropic:
     if _client is None:
         _client = anthropic.Anthropic(timeout=30.0, max_retries=2)
     return _client
+
+
+def _parse(client: anthropic.Anthropic, **kwargs):
+    """client.messages.parse, inside the daily budget (raises budget.OverBudget when it's spent)."""
+    budget.check()
+    resp = client.messages.parse(**kwargs)
+    budget.charge(kwargs["model"], resp)
+    return resp
 
 
 class Caption(BaseModel):
@@ -102,7 +115,7 @@ def caption_frame(jpeg: bytes, mine: list[dict] = ()) -> dict:
         return {"scene": "stub: red Iron Man helmet on a grey chair in the hallway", "room_guess": "hallway",
                 "objects": ["red Iron Man helmet on grey chair"], "landmarks": ["red exit sign"]}
     try:
-        resp = _client_().messages.parse(
+        resp = _parse(_client_(),
             model=CAPTION_MODEL,
             max_tokens=1024,
             output_config={"effort": "low"},
@@ -227,7 +240,7 @@ def study_item(jpeg: bytes, item: str) -> dict:
         return fallback
     w, h = size
     try:
-        resp = _client_().messages.parse(
+        resp = _parse(_client_(),
             model=STUDY_MODEL,
             max_tokens=1024,
             output_config={"effort": "low"},
@@ -336,7 +349,7 @@ def look_for(item: dict, entries: list[dict]) -> list[dict]:
         return []
     content.append({"type": "text", "text": f"Where is sir's {name} in these frames?"})
     try:
-        resp = _client_().with_options(timeout=LOOK_TIMEOUT_S, max_retries=0).messages.parse(
+        resp = _parse(_client_().with_options(timeout=LOOK_TIMEOUT_S, max_retries=0),
             model=LOOK_MODEL, max_tokens=800, output_config={"effort": "low"}, system=LOOK_PROMPT,
             messages=[{"role": "user", "content": content}], output_format=Sightings,
         )

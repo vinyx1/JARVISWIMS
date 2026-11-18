@@ -8,6 +8,30 @@ headers) or from another machine needs it: `?k=<key>` on the first page load (th
 which a `jarvis_key` cookie (HttpOnly, Secure, 12 h) carries it. Without it: `403`. Requests from
 the laptop itself (`localhost`) never need it. No key set means open, as in development.
 
+**Rooms (public mode, `JARVIS_PUBLIC=1`).** Each visitor's data is private. Opening a page hands
+out a `jarvis_room` cookie (HttpOnly, SameSite=Lax, Secure on HTTPS, 7 days). Every endpoint
+below then acts on that visitor's room only: `/log`, `/mine` and `/latest` show only their
+photos, and `/frames/<id>.jpg` only resolves inside their room. Locally there is one shared room.
+
+**Limits (public mode).** Refusals are JSON `{"detail": "<a line Jarvis can say>"}` (an HTML page
+for browser navigations), some with `Retry-After`:
+- `429`: too many requests (per IP; per visitor per endpoint, e.g. 30 `/frame`/min, 12 `/ask`/min),
+  too many new sessions from one IP, or the room's photo cap is reached (`/frame`).
+- `413`: upload too large (photo 3 MB, preview 400 KB, audio 1 MB, request 6 MB). `415`: not a JPEG/PNG.
+- `422`: text fields too long (`question` 400 chars, `item` 80, ...).
+- `403`: a POST whose `Origin` is another site.
+- `503`: every room is in use.
+- Over the daily AI budget, `/ask` still returns `200` with an in-character `answer` saying so.
+
+## GET /join
+
+Public mode. The QR link from `GET /phone`: sets the room cookie for that room and redirects
+(`303`) to `/capture.html`, so the phone joins the HUD's session. Unknown room: `404`.
+
+## GET /healthz
+
+`{"ok": true}`. Liveness only (Railway's health check); never creates a room.
+
 ## POST /frame
 
 Upload one camera frame. Send it as `multipart/form-data`:
@@ -204,8 +228,11 @@ Captions still running from before the reset are dropped, so it's safe while the
 ## GET /health
 
 ```json
-{ "ai_ok": false, "ai_error": "AuthenticationError: ... invalid x-api-key", "frames": 12 }
+{ "ai_ok": false, "ai_error": "AuthenticationError: ... invalid x-api-key", "frames": 12,
+  "speech_ready": true, "items": 2,
+  "budget": { "day": "2026-11-18", "spent_usd": 0.42, "daily_usd": 2.0, "room_spent_usd": 0.05, "room_usd": 0.25 } }
 ```
+`budget`: today's (UTC) estimated Claude spend, all visitors and this room, against the caps.
 `ai_ok` turns false when a Claude call fails (bad key, no network) and true again on the next
 success. A failing AI never crashes anything; captions just become "unclear frame", so check this.
 

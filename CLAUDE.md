@@ -116,6 +116,10 @@ photos of the demo route, in walking order (`01.jpg`…), and
   `cloudflared tunnel --url http://localhost:8000` (no account needed) so the
   iPhone can open the camera over HTTPS. The HUD itself uses `localhost:8000`. Use a phone
   hotspot, not venue Wi-Fi. During development, everyone runs their own backend locally.
+  Since the hackathon there is also a **public deployment** on Railway (`Dockerfile`,
+  `JARVIS_PUBLIC=1`): a private room per visitor, rate limits and a daily AI budget. See
+  `DEPLOY.md`. Any new endpoint must work per room (`store.current()`), and any new Claude call
+  must go through `budget.check()` / `budget.charge()`.
 - **Live demo (~60s, rehearsed):** start capture, walk past 2–3 distinctive
   landmarks, put the Iron Man helmet (or a jacket) down, walk back to the stage,
   then say "Jarvis, where did I leave my helmet?"

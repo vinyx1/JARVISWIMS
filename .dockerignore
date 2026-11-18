@@ -1,0 +1,19 @@
+# Never ship secrets, local memory or dev clutter into the image.
+.env
+.env.*
+!.env.example
+data/
+**/.venv/
+**/__pycache__/
+*.pyc
+.git/
+.github/
+.pytest_cache/
+.taste-skill/
+tests/
+samples/
+scripts/
+start
+Start Jarvis.command
+*.md
+!prompts/*.md
