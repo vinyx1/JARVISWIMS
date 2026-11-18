@@ -92,16 +92,18 @@ def remember(item: str, description: str, frame: dict, marks: list[str] = (), cl
         return dict(entry)
 
 
-def mark_seen(item: str, frame_id: str, where: str, room: str = "", landmarks: list[str] = ()) -> bool:
+def mark_seen(item: str, frame_id: str, where: str, room: str = "", landmarks: list[str] = (),
+              force: bool = False) -> bool:
     """Record where one of sir's registered items was last seen. Never expires, unlike the
-    caption window answers look at. Ignores a frame older than the current record."""
+    caption window answers look at. Ignores a frame older than the current record, unless
+    `force` (sir pointed at that photo himself: "that's it")."""
     with _lock:
         frame = next((e for e in reversed(_log) if e["id"] == frame_id), None)
         entry = next((m for m in _mine if m["item"].lower() == item.lower()), None)
         if not frame or not entry:
             return False
         old = entry.get("last_seen")
-        if old and old.get("ts", 0) > frame["ts"]:
+        if old and old.get("ts", 0) > frame["ts"] and not force:
             return False
         entry["last_seen"] = {"frame_id": frame_id, "url": frame["url"], "ts": frame["ts"],
                               "where": where, "room": room, "landmarks": list(landmarks)[:3]}

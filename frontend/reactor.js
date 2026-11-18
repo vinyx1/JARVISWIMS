@@ -1,6 +1,6 @@
 // The Jarvis core: layered hologram rings around a particle core, drawn on a canvas.
 // Film-HUD language: hairline tick rings, segmented and partial arcs at different depths and
-// speeds, a coil of wedges, a hot core, drifting particles, a radar sweep, tiny live readouts.
+// speeds, a coil of wedges, a hot core, drifting particles, a radar sweep.
 //
 //   const core = createReactor(canvas);
 //   core.state = 'idle' | 'armed' | 'listening' | 'thinking' | 'speaking';
@@ -70,12 +70,9 @@ export function createReactor(canvas, {reducedMotion = false} = {}) {
   canvas.addEventListener('dblclick', onDouble);
   const motion = reducedMotion ? 0.25 : 1;
   const parts = Array.from({length: 240}, () => newParticle(true));
-  const readouts = [
-    {angle: -0.62, label: 'CORE', value: () => (0.42 + 0.05 * Math.sin(rot * 1.7)).toFixed(3)},
-    {angle: 0.55, label: 'SYNC', value: () => `${(99.2 + 0.7 * Math.sin(rot * 0.9)).toFixed(1)}%`},
-    {angle: 2.55, label: 'VOX', value: () => `${Math.round(level * 100).toString().padStart(3, '0')}`},
-    {angle: 3.75, label: 'NODE', value: () => `0x${(Math.floor(rot * 40) & 0xfff).toString(16).padStart(3, '0').toUpperCase()}`},
-  ];
+  // No readouts around the core: the old CORE / SYNC / VOX / NODE numbers were made up.
+  // Real figures (photos, items, camera) live in the HUD's stats strip.
+  const readouts = [];
 
   function newParticle(anywhere) {
     return {a: Math.random() * TAU, r: anywhere ? 0.18 + Math.random() * 1.2 : 1.05 + Math.random() * 0.3,

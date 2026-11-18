@@ -11,6 +11,7 @@ nothing, it returns ERROR_REPLY (CLAUDE.md integration rule 3).
 import logging
 import re
 import time
+from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
 from typing import Literal
 
@@ -183,21 +184,128 @@ def _keyword_fallback(question: str, entries: list[dict], now_ms: float) -> dict
     return {**ERROR_REPLY, "frames": []}
 
 
-def answer(question: str, log: list[dict], mine: list[dict] = ()) -> dict:
+def _words(text: str) -> set[str]:
+    return {w.rstrip("s") for w in re.findall(r"[a-z]+", text.lower())}
+
+
+def asked_item(question: str, mine) -> dict | None:
+    """The registered item the question is about ("where's my bottle?" -> the water bottle), or None.
+    Every word of its name, or at least its last word (the noun), must appear in the question."""
+    asked, best = _words(question), None
+    for m in mine or ():
+        if not isinstance(m, dict) or not str(m.get("item", "")).strip():
+            continue
+        name = re.findall(r"[a-z]+", m["item"].lower())
+        if not name:
+            continue
+        score = 2 if {w.rstrip("s") for w in name} <= asked else 1 if name[-1].rstrip("s") in asked else 0
+        if score and (best is None or score > best[0]):
+            best = (score, m)
+    return best[1] if best else None
+
+
+LOOK_SKIP = re.compile(r"^unclear frame|nearly all black|almost entirely black|no discernible", re.I)
+
+
+def frames_since_sighting(item: dict, entries: list[dict], limit: int = 16) -> list[dict]:
+    """The frames worth a second look for `item`: newer than its last confirmed sighting (a
+    `MY <item> (` caption or its last-seen record), without blank frames, newest first. Frames whose
+    caption mentions the item ("possibly sir's water bottle", "black bottle in hand") always make
+    the cut, so a glimpse isn't pushed out by the frames that came after it."""
+    tag = f"MY {item['item']} (".lower()
+    noun = re.findall(r"[a-z]+", item["item"].lower())[-1].rstrip("s")
+    seen = item.get("last_seen") if isinstance(item.get("last_seen"), dict) else {}
+    since = max([seen.get("ts") or 0] + [e["ts"] for e in entries
+                                         if any(o.lower().startswith(tag) for o in e["caption"].get("objects", []))])
+    newer = [e for e in reversed(entries) if e["ts"] > since and not LOOK_SKIP.search(e["caption"].get("scene", ""))
+             and (e["caption"].get("objects") or e["caption"].get("landmarks"))]
+    hinted = lambda e: any("sir's" in o.lower() or noun in _words(o) for o in e["caption"].get("objects", []))
+    keep = {e["id"] for e in [e for e in newer if hinted(e)][:limit]}
+    keep |= {e["id"] for e in [e for e in newer if e["id"] not in keep][:limit - len(keep)]}
+    return [e for e in newer if e["id"] in keep]
+
+
+SURE = 80    # a sighting this confident is where it is: "Aha, found it, sir."
+MAYBE = 55   # down to this, it's offered as "it might also be…"; anything lower is ignored
+
+
+def _from_sightings(item: dict, sightings: list[dict], entries: list[dict], text_frames: list[dict],
+                    now_ms: float) -> dict | None:
+    """Turn the second look into Jarvis's reply.
+
+    The newest sighting at SURE or above is where it is. Less certain sightings (MAYBE to SURE)
+    that are newer than that are offered as "it might also be…", since it may have moved since.
+    With nothing at SURE, he says it might be at the newest possible spots, and the caption
+    answer's frames follow. Nothing at MAYBE: None (the caption answer stands).
+    Frames: the sure one first, then the possible ones newest first; each has `sure` and `where`."""
+    by_id = {e["id"]: e for e in entries}
+    hits = sorted((s for s in sightings if s["id"] in by_id and s["confidence"] >= MAYBE),
+                  key=lambda s: by_id[s["id"]]["ts"], reverse=True)
+    if not hits:
+        return None
+    name = item["item"]
+    where = lambda s: s["where"].strip().rstrip(".")
+    ago = lambda s: _ago(now_ms - by_id[s["id"]]["ts"])
+    frame = lambda s, sure: {"id": s["id"], "url": by_id[s["id"]]["url"], "ts": by_id[s["id"]]["ts"],
+                             "note": f"{name} {where(s)}", "where": where(s), "sure": sure}
+    lead = next((s for s in hits if s["confidence"] >= SURE), None)
+    if lead:
+        newer = [s for s in hits if by_id[s["id"]]["ts"] > by_id[lead["id"]]["ts"]]
+        said = f"Aha, found it, sir. Your {name} was {where(lead)}, {ago(lead)}."
+        if newer:
+            said += f" It might also be {where(newer[0])}, a little later."
+        frames = [frame(lead, True)] + [frame(s, False) for s in newer]
+    else:
+        said = f"I can't be certain, sir, but your {name} might be {where(hits[0])}, {ago(hits[0])}."
+        if len(hits) > 1:
+            said += f" Or possibly {where(hits[1])}."
+        frames = [frame(s, False) for s in hits]
+        shown = {f["id"] for f in frames}
+        frames += sorted(({**f, "sure": False} for f in text_frames if f["id"] not in shown),
+                         key=lambda f: f["ts"], reverse=True)
+    return {"answer": said, "kind": "find", "item": name, "frames": frames}
+
+
+def answer(question: str, log: list[dict], mine: list[dict] = (), look=None) -> dict:
     """Return {answer, kind, frames: [{id, url, ts, note}]}.
 
     `log` holds only the frames that have finished captioning, oldest first.
     `mine` is store.mine(): sir's registered items, [{item, description, ...}].
+    `look(item, entries) -> [{id, where, confidence}]` (ai.look_for): when the question is about a
+    registered item, the photos since its last confirmed sighting get a second look, alongside the
+    caption answer, and a newer sighting wins (it may have been moved somewhere the captions missed).
     """
     entries = log[-MAX_LOG_ENTRIES:]
     if not entries and not any(isinstance(m, dict) and m.get("last_seen") for m in mine or ()):
         return {**EMPTY_LOG_REPLY, "frames": []}
     now_ms = time.time() * 1000
+    item = asked_item(question, mine)
+    recheck = frames_since_sighting(item, entries) if item and look else []
+    pool = ThreadPoolExecutor(max_workers=1) if recheck else None
+    second_look = pool.submit(look, item, recheck) if pool else None
     try:
-        out = _ask_model(question, entries, now_ms, mine)
-    except Exception:
-        logger.exception("answering %r failed; using keyword fallback", question)
-        out = None
-    if out is None:
-        return _keyword_fallback(question, entries, now_ms)
-    return {"answer": out.answer, "kind": out.kind, "frames": _resolve_frames(out.frames, entries, mine)}
+        try:
+            out = _ask_model(question, entries, now_ms, mine)
+        except Exception:
+            logger.exception("answering %r failed; using keyword fallback", question)
+            out = None
+        result = (_keyword_fallback(question, entries, now_ms) if out is None else
+                  {"answer": out.answer, "kind": out.kind, "frames": _resolve_frames(out.frames, entries, mine)})
+        if result["kind"] == "find":   # the screen shows the first as LAST SEEN: newest first, always
+            result["frames"].sort(key=lambda f: f["ts"], reverse=True)
+        if second_look:
+            try:
+                sightings = second_look.result()
+            except Exception:
+                logger.exception("second look for %r failed", item.get("item"))
+                sightings = []
+            logger.info("second look for %s over %d frames: %s", item["item"], len(recheck), sightings)
+            found = _from_sightings(item, sightings, entries, result["frames"], now_ms)
+            if found:
+                return found
+        if item and result["kind"] == "find":
+            result["item"] = item["item"]   # the phone can then confirm a photo or ask him to keep looking
+        return result
+    finally:
+        if pool:
+            pool.shutdown(wait=False)

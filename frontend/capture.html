@@ -16,7 +16,7 @@
   <video id="cam" autoplay playsinline muted aria-label="Camera"></video>
 
   <section id="start" class="start" aria-live="polite">
-    <p class="wordmark">J.A.R.V.I.S.</p>
+    <h1 class="wordmark">J.A.R.V.I.S.</h1>
     <p id="startText" class="start-text">Camera and microphone are used to find your things.</p>
     <button id="begin" class="begin" type="button">Begin</button>
   </section>
@@ -26,6 +26,25 @@
     <canvas id="core" class="core"></canvas>
     <p id="heard" class="heard"></p>
     <p id="said" class="said"></p>
+  </section>
+
+  <!-- Where he saw it: a wheel of photos, the one he's sure of first, then where it might be.
+       Tap the photo if that's it; × if none of them is (he keeps looking). -->
+  <section id="found" class="found" aria-label="Where Jarvis saw it" hidden>
+    <div class="found-wheel">
+      <button id="foundPrev" class="found-nav" type="button" aria-label="Previous photo">‹</button>
+      <figure id="foundCard" class="found-card">
+        <button id="foundShot" class="found-shot" type="button" aria-label="That's it"><img id="foundImg" alt=""></button>
+        <figcaption>
+          <b id="foundTag"></b>
+          <span id="foundNote"></span>
+          <small id="foundHint"></small>
+        </figcaption>
+      </figure>
+      <button id="foundNext" class="found-nav" type="button" aria-label="Next photo">›</button>
+    </div>
+    <p id="foundCount" class="found-count"></p>
+    <button id="foundClose" class="found-close" type="button" aria-label="None of these">×</button>
   </section>
 
   <p id="toast" class="toast" role="status" hidden></p>

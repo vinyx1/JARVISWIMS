@@ -55,6 +55,22 @@ description. The HUD shows it as `REGISTERED · MY <ITEM>`.
   "frames": [ { "id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000, "note": "silver MacBook with a pumpkin sticker" } ] }
 ```
 
+**Second look for moved items.** When the question names a registered item ("where's my
+bottle?"), the photos since its last confirmed sighting (up to 16: any whose caption hints at the
+item, then the newest; blank frames skipped) are shown again to Sonnet with the item's close-up
+(`ai.look_for`, confidence 0–100 per sighting), alongside the caption answer:
+
+- **80+ (`answer.SURE`)**: the newest such sighting is where it is: `"Aha, found it, sir. Your water
+  bottle was on the carpet by the pink beanbag, …"`. Newer 55–79 sightings are added as "It might
+  also be …".
+- **55–79 only (`answer.MAYBE`)**: `"I can't be certain, sir, but your water bottle might be …"`,
+  then the caption answer's frames.
+- **Nothing at 55+**: the caption answer stands.
+
+Every `find` reply lists its frames newest first (the sure one leads). A `find` about a registered
+item also carries `"item": "water bottle"`, and second-look frames carry `"where"` (the spot, in
+words) and `"sure"` (true/false). The phone's photo wheel uses these:
+
 `/ask` gives up after 12s with an in-character "taking longer than expected" reply. If the
 answer model fails, a keyword search over the captions answers instead.
 
@@ -63,6 +79,21 @@ answer model fails, a keyword search over the captions answers instead.
 camera sees now, describes the spot, and records it as that item's last-seen location
 (registering the item first if it's new). Reply is `kind: "remember"` with that photo:
 `"Very good, sir. Your airpods: on desk by the window, near the red exit sign."`
+
+## POST /confirm
+
+`{"item": "water bottle", "frame_id": "f_000016", "where": "on the carpet by the laundry basket"}`:
+sir tapped a photo, so that's where it is. It becomes the item's last-seen record (even if older than
+the current one) and ends any watch. `{"answer": "Very good, sir. Noted: your water bottle, on the carpet by the laundry basket."}`; `404` for an unknown item or frame.
+
+## POST /watch
+
+`{"item": "water bottle"}`: sir closed the photos (none was it). Reply
+`{"answer": "Very well, sir. I'll keep looking for your water bottle.", "watching": true}`
+(`watching: false` for an unregistered item). Every later frame is then checked: a `MY <item>`
+caption, or a hint ("possibly sir's …") that a second look puts at 80+, is announced once through
+`/interaction` with `source: null`, so the phone speaks it:
+`"Sir, I know where your water bottle is now. It's on the shelf."` (one `sure` frame). Reset clears watches.
 
 ## GET /interaction
 

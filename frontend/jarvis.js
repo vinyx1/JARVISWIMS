@@ -17,11 +17,11 @@ const el = (tag, cls, text) => { const e = document.createElement(tag); if (cls)
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 
 // ---------- modes: idle → armed → thinking → speaking → idle ----------
-const STATUS = {idle: 'STANDING BY', armed: 'YES, SIR?', listening: 'LISTENING', thinking: 'ANALYSING FOOTAGE', speaking: 'RESPONDING'};
+const STATUS = {idle: 'Ready', armed: 'Yes, sir?', listening: 'Listening', thinking: 'Looking through the footage', speaking: 'Answering'};
 let mode = 'idle', idleTimer = null;
 function setMode(next) {
   mode = next; document.body.dataset.mode = next; core.state = next;
-  $('statusText').textContent = STATUS[next] || next.toUpperCase();
+  $('statusText').textContent = STATUS[next] || next;
   clearTimeout(idleTimer);
   if (next === 'armed') idleTimer = setTimeout(() => { if (mode === 'armed') setMode('idle'); }, 8000);
 }
@@ -57,7 +57,9 @@ function showEvidence(result) {
     $('evCap').textContent = `${f.note || ''} · ${formatSeenAt(f.ts)}`;
   };
   pick(target);
-  $('evTag').textContent = result.kind === 'remember' ? 'REGISTERED' : result.kind === 'retrace' ? 'TARGET' : frames.length > 1 && result.kind === 'find' ? 'POSSIBLE MATCH' : 'LAST SEEN';
+  $('evTag').textContent = result.kind === 'remember' ? 'Saved' : result.kind === 'retrace' ? 'Where it is'
+    : result.kind === 'find' && target.sure === true ? 'Found' : result.kind === 'find' && target.sure === false ? 'Might be here'
+    : frames.length > 1 && result.kind === 'find' ? 'Best match' : 'Last seen';
   if (result.kind === 'find' && frames.length > 1) {
     $('cands').append(...frames.map((f, i) => {
       const b = el('button'); b.type = 'button'; b.setAttribute('aria-pressed', String(i === 0));
@@ -195,11 +197,12 @@ async function readouts() {
   try {
     const [latest, health] = await Promise.all([api.getLatest(), (await fetch('/health', {cache: 'no-store'})).json()]);
     opticsLive = !!latest && Date.now() - latest.ts < 20000;
-    $('roOptics').textContent = opticsLive ? 'live' : 'offline'; $('roOptics').className = `v ${opticsLive ? 'on' : ''}`;
-    $('roMem').textContent = String(health.frames).padStart(3, '0');
-    $('roItems').textContent = String(health.items ?? 0);
-    if (!health.ai_ok) { $('roOptics').textContent = 'ai fault'; $('roOptics').className = 'v warn'; }
-  } catch { $('roOptics').textContent = 'no link'; $('roOptics').className = 'v warn'; }
+    $('roOptics').textContent = opticsLive ? 'live' : 'not linked'; $('roOptics').className = `v ${opticsLive ? 'on' : ''}`;
+    const photos = health.frames ?? 0, items = health.items ?? 0;
+    $('roMem').textContent = photos.toLocaleString('en-GB'); $('roMemL').textContent = photos === 1 ? 'photo' : 'photos';
+    $('roItems').textContent = String(items); $('roItemsL').textContent = items === 1 ? 'thing of yours' : 'of your things';
+    if (!health.ai_ok) { $('roOptics').textContent = 'AI offline'; $('roOptics').className = 'v warn'; }
+  } catch { $('roOptics').textContent = 'no server'; $('roOptics').className = 'v warn'; }
   try {
     const {url} = await (await fetch('/phone', {cache: 'no-store'})).json();
     if (url !== phoneUrl) { phoneUrl = url; document.querySelectorAll('[data-qr]').forEach(img => { if (url) img.src = `/qr.svg?u=${encodeURIComponent(url)}`; }); }
@@ -277,11 +280,11 @@ async function intro() {
   ]);
   const live = latest && Date.now() - latest.ts < 20000;
   const checks = [
-    ['OPTICAL FEED', live ? 'ONLINE' : 'AWAITING', live],
-    ['SPEECH RECOGNITION', health?.speech_ready ? 'READY' : 'WARMING', !!health?.speech_ready],
-    ['LANGUAGE CORE', health ? (health.ai_ok ? 'ONLINE' : 'FAULT') : 'NO LINK', !!health?.ai_ok],
-    ['VISUAL MEMORY', `${health?.frames ?? 0} FRAMES`, true],
-    ['REGISTERED ITEMS', `${mine.length}`, true],
+    ['Phone camera', live ? 'Connected' : 'Waiting for the phone', live, 'the phone camera'],
+    ['Hearing', health?.speech_ready ? 'Ready' : 'Warming up', !!health?.speech_ready, 'my hearing'],
+    ['Thinking', health ? (health.ai_ok ? 'Ready' : 'Can’t reach Claude') : 'No server', !!health?.ai_ok, 'my thinking'],
+    ['Photos remembered', `${health?.frames ?? 0}`, true],
+    ['Things of yours', `${mine.length}`, true],
   ];
   await wait(1300);
   for (const [name, value, ok] of checks) {
@@ -292,7 +295,8 @@ async function intro() {
   }
   if (booted) return;
   await wait(300);
-  $('introGreet').textContent = `${greetingFor()} All systems ${checks.every(c => c[2]) ? 'nominal' : 'standing by'}.`;
+  const waiting = checks.find(c => !c[2]);
+  $('introGreet').textContent = `${greetingFor()} ${waiting ? `Just waiting on ${waiting[3]}.` : 'Everything’s ready.'}`;
   $('introGreet').classList.add('on');
   await wait(600);
   introReady = true;

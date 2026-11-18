@@ -38,6 +38,9 @@ export function createApi({fetchImpl=(...args)=>fetch(...args),timeoutMs=20000}=
     uploadStill(blob){const body=new FormData();body.append('image',blob,'still.jpg');return request('/still',{method:'POST',body},x=>x?.ok===true);},
     getLog:()=>request('/log',{},Array.isArray),
     getLatest:()=>request('/latest',{},x=>x===null||(typeof x?.id==='string'&&typeof x.url==='string'&&Number.isFinite(x.ts)&&(x.caption===null||typeof x.caption?.scene==='string'))),
-    resetMemory:()=>json('/reset',{},x=>x?.ok===true)
+    resetMemory:()=>json('/reset',{},x=>x?.ok===true),
+    // the photo wheel: "that's it" (this photo is where it is) / "keep looking" (none of them)
+    confirmSighting:(item,frameId,where)=>json('/confirm',{item,frame_id:frameId,where:where||null},x=>typeof x?.answer==='string'),
+    keepLooking:item=>json('/watch',{item},x=>typeof x?.answer==='string')
   };
 }

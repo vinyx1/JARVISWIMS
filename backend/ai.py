@@ -256,6 +256,99 @@ def study_item(jpeg: bytes, item: str) -> dict:
     return {"description": description, "marks": marks, "box": box, "closeup": crop(jpeg, box) if box else None}
 
 
+# ---------- a second look: "where's my X?" after it was moved ----------
+# Captions are written one frame at a time by a fast model, so a small, dark or blurry glimpse of
+# a moved item often gets logged as "possibly a remote". When sir asks about a registered item,
+# the frames since its last confirmed sighting are shown again, with its close-up, to a stronger
+# model. Haiku was tried and reported confident sightings in the wrong frames, so this uses Sonnet.
+
+LOOK_MODEL = os.environ.get("JARVIS_LOOK_MODEL", "claude-sonnet-5-5")
+LOOK_TIMEOUT_S = 9      # inside main.py's 12 s /ask limit; the caption answer runs alongside
+LOOK_LONG_EDGE = 768    # tested: same answers as full size, and well under the time limit
+
+LOOK_PROMPT = """You are the vision system of J.A.R.V.I.S. Sir has lost one of his own belongings and it has
+probably been moved. You get a close-up of the item, then several camera frames (each labelled
+with its id). Find every frame where THAT item is visible, however small, dark, blurry or far
+off at the edge of the frame: a glimpse in the background counts. It must match the close-up
+in shape, color and marks; ignore things that merely share a color.
+
+For each frame where you see it:
+- id: copied exactly from the label.
+- where: where it is, as a short spoken phrase starting with a preposition, under 12 words,
+  using what it sits on and the nearest distinctive thing, e.g. "on the carpet by the pink
+  beanbag, next to the heater". Being carried: "in your hand by the desk". Never "on the right
+  of the frame".
+- confidence: 0 to 100, how likely it is THAT item and not a look-alike or a shadow.
+  90+: clearly it, marks visible. 80: right shape, color and size, nothing contradicts it.
+  60: a plausible glimpse (dark, blurry or far) of the right shape and color. Below 50: a
+  guess; leave those out.
+Return an empty list if it isn't in any frame."""
+
+
+class Sighting(BaseModel):
+    id: str
+    where: str
+    confidence: int
+
+
+class Sightings(BaseModel):
+    sightings: list[Sighting]
+
+
+def _small(jpeg: bytes, long_edge: int = LOOK_LONG_EDGE) -> bytes:
+    """Downscaled copy (faster to send and read); the original if anything goes wrong."""
+    try:
+        from PIL import Image
+        img = Image.open(io.BytesIO(jpeg)).convert("RGB")
+        if max(img.size) <= long_edge:
+            return jpeg
+        img.thumbnail((long_edge, long_edge))
+        out = io.BytesIO()
+        img.save(out, "JPEG", quality=85)
+        return out.getvalue()
+    except Exception:
+        return jpeg
+
+
+def look_for(item: dict, entries: list[dict]) -> list[dict]:
+    """Look at the frames in `entries` (log entries) for sir's registered `item` (a store.mine()
+    entry). Returns [{"id", "where", "confidence": 0-100}] for frames that exist in `entries`. Never raises:
+    on any error, timeout or missing photos it returns []."""
+    if os.environ.get("ECHO_STUB_AI") == "1" or not entries or not isinstance(item, dict):
+        return []
+    import store  # local: store creates data folders on import
+    name = str(item.get("item", "")).strip()
+    desc = str(item.get("description", "")).strip() or name
+    marks = [str(x) for x in item.get("marks") or [] if str(x).strip()]
+    ref = store.ref_path(item) or (store.FRAMES / f"{item.get('frame_id', '')}.jpg")
+    if not name or not ref.is_file():
+        return []
+    content = [{"type": "text", "text": f'Sir\'s {name}: "{desc}".'
+                + (f" Distinguishing marks: {'; '.join(marks)}." if marks else "") + " Close-up:"},
+               _image(_small(ref.read_bytes(), 512))]
+    ids = set()
+    for e in entries:
+        path = store.FRAMES / f"{e['id']}.jpg"
+        if path.is_file():
+            ids.add(e["id"])
+            content += [{"type": "text", "text": f"Frame {e['id']}:"}, _image(_small(path.read_bytes()))]
+    if not ids:
+        return []
+    content.append({"type": "text", "text": f"Where is sir's {name} in these frames?"})
+    try:
+        resp = _client_().with_options(timeout=LOOK_TIMEOUT_S, max_retries=0).messages.parse(
+            model=LOOK_MODEL, max_tokens=800, output_config={"effort": "low"}, system=LOOK_PROMPT,
+            messages=[{"role": "user", "content": content}], output_format=Sightings,
+        )
+    except Exception as err:
+        _failed("look_for", err)
+        return []
+    if resp.stop_reason == "refusal" or resp.parsed_output is None:
+        return []
+    return [{**s.model_dump(), "confidence": max(0, min(100, s.confidence))}
+            for s in resp.parsed_output.sightings if s.id in ids and s.where.strip()]
+
+
 def describe_item(jpeg: bytes, item: str) -> str:
     """Just the description (kept for callers that only need the phrase)."""
     return study_item(jpeg, item)["description"]

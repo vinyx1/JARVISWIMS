@@ -7,7 +7,7 @@
 set -uo pipefail
 cd "$(dirname "$0")/.."
 
-PORT=8000
+PORT="${PORT:-8000}"
 KEEP=0; [[ "${1:-}" == "--keep" ]] && KEEP=1
 c() { printf '\033[%sm%s\033[0m\n' "$1" "$2"; }   # c <color> <text>
 die() { c 31 "✗ $1"; exit 1; }

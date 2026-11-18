@@ -16,8 +16,29 @@ export const ARMED_MS = 8000;   // after "Jarvis" on its own, the next sentence 
  *          onAnswer?: (result: any, question: string) => void, onError?: (e: Error) => void,
  *          now?: () => number}} opts
  */
-export function createConversation({listen, ask = null, askWithPhoto = null, onAccepted = () => {}, mic, speak, onState = () => {}, onHeard = () => {}, onAnswer = () => {}, onError = () => {}, now = () => Date.now()}) {
+export function createConversation({listen, ask = null, askWithPhoto = null, onAccepted = () => {}, filler = () => [], onFiller = () => {}, mic, speak, onState = () => {}, onHeard = () => {}, onAnswer = () => {}, onError = () => {}, now = () => Date.now()}) {
   let busy = false, armedUntil = 0, generation = 0;
+
+  // Something to say while the answer is worked out: filler(question) -> [{after: ms, text}].
+  // Each line plays at its time if the answer hasn't arrived; the returned stop() lets the line
+  // being spoken finish (never cut mid-sentence), drops the rest, and resolves when he's quiet.
+  function startFiller(question, token) {
+    const lines = filler(question) || [];
+    let stopped = false, chain = Promise.resolve(), spoke = false;
+    const timers = lines.map(({after = 0, text}) => setTimeout(() => {
+      chain = chain.then(async () => {
+        if (stopped || token !== generation) return;
+        if (!spoke) { spoke = true; mic.pause(); }
+        onFiller(text);
+        try { await speak(text); } catch { /* the answer still comes */ }
+      });
+    }, after));
+    return async () => {
+      stopped = true; timers.forEach(clearTimeout);
+      await chain;
+      if (spoke) await mic.resume();
+    };
+  }
 
   async function handle(wav, {manual}) {
     if (busy) return;                         // one question at a time; Jarvis is busy
@@ -35,7 +56,9 @@ export function createConversation({listen, ask = null, askWithPhoto = null, onA
       if (!result && reply.question && (reply.need_still ? askWithPhoto : ask)) {
         if (!manual) onAccepted();   // hands-free: "Jarvis" confirmed, acknowledge before the wait
         onState('thinking');
-        result = await (reply.need_still ? askWithPhoto : ask)(reply.question);
+        const quiet = reply.need_still ? async () => {} : startFiller(reply.question, token);
+        try { result = await (reply.need_still ? askWithPhoto : ask)(reply.question); }
+        finally { await quiet(); }
         if (token !== generation) return;
       }
       if (!result) { onState(manual ? 'not-heard' : 'listening'); return; }

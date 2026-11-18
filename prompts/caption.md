@@ -36,6 +36,10 @@ Fill in the fields:
   of thing but you can't confirm the marks, write it normally with "possibly sir's":
   "white earbuds case, possibly sir's, on desk". Other items of the same kind are written
   normally, without MY.
+  Sir's items get moved, so check the edges, the background and the floor too. A small, dark or
+  blurry thing with the same shape and color as one of his items is far more likely to be his
+  item than something else: write it with its name, "possibly sir's water bottle on carpet by
+  the bed", not "possibly a remote".
 - landmarks: fixed, distinctive things that help someone find their way back: signs, banners,
   posters, doors, stairs, pillars, tables, a stage, decorations. Be specific
   ("red exit sign", "orange pumpkin banner", "balloon arch"), not generic ("wall", "floor").

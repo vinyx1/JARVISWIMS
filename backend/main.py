@@ -84,8 +84,95 @@ def _caption_in_background(frame_id: str, jpeg: bytes, session_id: int) -> None:
         store.set_caption(frame_id, caption, session_id)
         if store.session() == session_id:
             _note_my_items(frame_id, caption)
+            _check_watches(frame_id, caption, session_id)
     except Exception:
         log.exception("captioning %s failed", frame_id)
+
+
+# ---------- "I'll keep looking for it, sir" ----------
+# After sir closes the photos without picking one (POST /watch), every new frame is checked for
+# that item: a "MY <item>" caption counts at once; a caption that only hints at it ("possibly
+# sir's water bottle") gets a second look, which must reach answer.SURE. The first hit is announced
+# like an answer (via /interaction, so the phone speaks it) and the watch ends.
+_watching: dict[str, float] = {}   # item -> since (ms)
+_watch_lock = threading.Lock()
+
+
+def _check_watches(frame_id: str, caption: dict, session_id: int) -> None:
+    with _watch_lock:
+        watched = dict(_watching)
+    if not watched:
+        return
+    entry = next((e for e in reversed(store.read_log()) if e["id"] == frame_id), None)
+    mine = {m["item"].lower(): m for m in store.mine()}
+    for item, since in watched.items():
+        m = mine.get(item.lower())
+        if not entry or not m or entry["ts"] < since:
+            continue
+        where = None
+        for obj in caption.get("objects") or []:
+            hit = _MY.match(obj)
+            if hit and hit.group(1).lower() == item.lower():
+                where = hit.group(3) or "in view"
+        noun = item.lower().split()[-1].rstrip("s")
+        if where is None and any("sir's" in o.lower() or noun in o.lower() for o in caption.get("objects") or []):
+            best = max(ai.look_for(m, [entry]), key=lambda s: s["confidence"], default=None)
+            if best and best["confidence"] >= answer.SURE:
+                where = best["where"]
+        if where is None or store.session() != session_id:
+            continue
+        with _watch_lock:
+            if _watching.pop(item, None) is None:
+                continue   # another frame announced it first
+        store.mark_seen(m["item"], frame_id, where, caption.get("room_guess", ""), caption.get("landmarks") or [])
+        _announce(f"(keeping an eye out for your {m['item']})", {
+            "answer": f"Sir, I know where your {m['item']} is now. It's {where.rstrip('.')}.",
+            "kind": "find", "item": m["item"],
+            "frames": [{"id": frame_id, "url": entry["url"], "ts": entry["ts"], "note": f"{m['item']} {where}",
+                        "where": where, "sure": True}]})
+
+
+def _announce(question: str, result: dict) -> None:
+    """Jarvis speaks up on his own: published like an answer, so every device shows and says it."""
+    global _exchange
+    with _interaction_lock:
+        _exchange = {"id": uuid.uuid4().hex, "question": question, "result": result, "source": None}
+
+
+class Watch(BaseModel):
+    item: str
+
+
+@app.post("/watch")
+def watch(body: Watch):
+    """Sir closed the photos: none of them was it. Keep an eye out for it from now on."""
+    item = next((m["item"] for m in store.mine() if m["item"].lower() == body.item.strip().lower()), None)
+    if not item:
+        return {"answer": "Very well, sir.", "watching": False}
+    with _watch_lock:
+        _watching[item] = time.time() * 1000
+    return {"answer": f"Very well, sir. I'll keep looking for your {item}.", "watching": True}
+
+
+class Confirm(BaseModel):
+    item: str
+    frame_id: str
+    where: str | None = None
+
+
+@app.post("/confirm")
+def confirm(body: Confirm):
+    """Sir tapped a photo: that's where it is. It becomes the item's last-seen record."""
+    entry = next((e for e in reversed(store.read_log()) if e["id"] == body.frame_id), None)
+    item = next((m["item"] for m in store.mine() if m["item"].lower() == body.item.strip().lower()), None)
+    if not entry or not item:
+        raise HTTPException(status_code=404, detail="Unknown item or frame.")
+    caption = entry.get("caption") or {}
+    where = (body.where or "").strip().rstrip(".") or _where_from_caption(item, caption) or "there"
+    store.mark_seen(item, body.frame_id, where, caption.get("room_guess", ""), caption.get("landmarks") or [], force=True)
+    with _watch_lock:
+        _watching.pop(item, None)
+    return {"answer": f"Very good, sir. Noted: your {item}, {where}.", "item": item, "frame_id": body.frame_id}
 
 
 @app.post("/frame")
@@ -277,7 +364,7 @@ async def _answer_request(body: Ask):
             return await _remember(item)
         captioned = [e for e in store.read_log() if e["caption"]]
         result = await asyncio.wait_for(
-            asyncio.to_thread(answer.answer, body.question, captioned, store.mine()), timeout=ASK_TIMEOUT_S
+            asyncio.to_thread(answer.answer, body.question, captioned, store.mine(), ai.look_for), timeout=ASK_TIMEOUT_S
         )
         return result
     except asyncio.TimeoutError:
@@ -564,6 +651,8 @@ def reset():
         _exchange_generation += 1
         _exchange = None
         _set_activity("idle")
+        with _watch_lock:
+            _watching.clear()
         store.reset()
         _preview.update(jpeg=None, ts=0.0, client_ts=0.0)
         _still.update(jpeg=None, ts=0.0)

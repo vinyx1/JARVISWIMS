@@ -89,3 +89,34 @@ test('push-to-talk chimes on release; chatter never chimes', async () => {
   await make({heard: 'nice costume', question: null, armed: false, result: null}).handle(new Uint8Array(), {manual: false});
   assert.equal(chimes.length, 1);
 });
+
+test('filler: speaks while the answer is worked out, finishes its line, then the answer', async () => {
+  const spoken = [], shown = [], mic = {paused: 0, resumed: 0, pause() { this.paused++; }, async resume() { this.resumed++; }};
+  let answerReady;
+  const convo = createConversation({
+    listen: async () => ({heard: 'Jarvis, where is my bottle', question: 'where is my bottle', armed: false, result: null}),
+    ask: () => new Promise(r => { answerReady = r; }),
+    filler: () => [{after: 0, text: 'Let me think, sir.'}, {after: 60000, text: 'Still looking, sir.'}],
+    onFiller: t => shown.push(t),
+    mic, speak: async t => { spoken.push(t); await new Promise(r => setTimeout(r, 20)); },
+  });
+  const done = convo.handle(new Uint8Array(), {manual: true});
+  await new Promise(r => setTimeout(r, 5));
+  answerReady({answer: 'Aha, there it is, sir.', kind: 'find', frames: []});
+  await done;
+  assert.deepEqual(spoken, ['Let me think, sir.', 'Aha, there it is, sir.'], 'the later line is dropped once the answer is in');
+  assert.deepEqual(shown, ['Let me think, sir.']);
+  assert.equal(mic.paused, mic.resumed, 'the mic is resumed as often as it was paused');
+});
+
+test('filler: a fast answer means no filler at all', async () => {
+  const spoken = [];
+  const convo = createConversation({
+    listen: async () => ({heard: 'Jarvis, hi', question: 'hi', armed: false, result: null}),
+    ask: async () => ({answer: 'Good evening, sir.', kind: 'other', frames: []}),
+    filler: () => [{after: 500, text: 'One moment, sir.'}],
+    mic: {pause() {}, async resume() {}}, speak: async t => { spoken.push(t); },
+  });
+  await convo.handle(new Uint8Array(), {manual: true});
+  assert.deepEqual(spoken, ['Good evening, sir.']);
+});

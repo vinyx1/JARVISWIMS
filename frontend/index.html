@@ -17,7 +17,7 @@
   <header class="hud-edge top">
     <div class="corner tl">
       <span class="brand">J.A.R.V.I.S.</span>
-      <span class="tagline">Mk V &middot; lost &amp; found protocol</span>
+      <span class="tagline">Finds the things you put down</span>
     </div>
     <div class="corner tr">
       <span class="clock"><span id="roClock">--:--</span><small id="roSec">--</small></span>
@@ -29,7 +29,7 @@
 
   <section id="intro" class="intro" aria-live="polite">
     <h1 id="title" class="title" aria-label="J.A.R.V.I.S."></h1>
-    <p class="expand">JUST A RATHER VERY INTELLIGENT SYSTEM</p>
+      <p class="expand" style="-webkit-text-stroke: 0.6px currentColor">WHERE IS IT?</p>
     <ol id="checks" class="checks"></ol>
     <p id="introGreet" class="intro-greet"></p>
     <button id="engage" class="engage" type="button" hidden><span>Engage</span></button>
@@ -37,7 +37,7 @@
   </section>
 
   <main class="stage" aria-live="polite">
-    <p id="status" class="status"><span class="dot"></span><span id="statusText">STANDING BY</span></p>
+    <p id="status" class="status"><span class="dot"></span><span id="statusText">Ready</span></p>
 
     <div id="idlePanel" class="idle-panel">
       <p id="greeting" class="greeting">Good evening, sir.</p>
@@ -49,8 +49,8 @@
       <div id="link" class="link" hidden>
         <img class="qr" data-qr alt="QR code: open the camera page on the iPhone">
         <div>
-          <p class="micro">LINK THE SUIT CAMERA</p>
-          <p class="small">Scan with the iPhone camera, then tap Begin.</p>
+          <p class="micro">Connect the phone</p>
+          <p class="small">Scan this with the iPhone camera, then tap Begin.</p>
         </div>
       </div>
     </div>
@@ -73,9 +73,9 @@
     </div>
 
     <div id="talk" class="talk" hidden>
-      <p class="micro">SIR</p>
+      <p class="micro">You asked</p>
       <p id="query" class="query"></p>
-      <p class="micro jarvis-label">J.A.R.V.I.S.</p>
+      <p class="micro jarvis-label">Jarvis</p>
       <p id="reply" class="reply"></p>
     </div>
 
@@ -83,7 +83,7 @@
       <div class="frame">
         <img id="evImg" alt="">
         <i class="c tl"></i><i class="c tr"></i><i class="c bl"></i><i class="c br"></i>
-        <span id="evTag" class="tag">LAST SEEN</span>
+        <span id="evTag" class="tag">Last seen</span>
         <span class="reticle" aria-hidden="true"></span>
       </div>
       <figcaption id="evCap"></figcaption>
@@ -97,10 +97,10 @@
       <span id="talkHint" class="talk-hint"><span class="vu" aria-hidden="true"><i></i><i></i><i></i><i></i><i></i></span><span id="talkText">Hold space to talk</span></span>
     </div>
     <div class="corner br gauges">
-      <div class="g"><span id="roOptics" class="v">—</span><span class="l">optics</span></div>
-      <div class="g"><span id="roMem" class="v">000</span><span class="l">frames</span></div>
-      <div class="g"><span id="roItems" class="v">0</span><span class="l">items</span></div>
-      <button id="audioBtn" class="g g-btn" type="button" aria-pressed="false" title="Jarvis speaks on this laptop (V)"><span id="roAudio" class="v">off</span><span class="l">audio</span></button>
+      <div class="g"><span id="roOptics" class="v">—</span><span class="l">phone camera</span></div>
+      <div class="g"><span id="roMem" class="v">0</span><span id="roMemL" class="l">photos</span></div>
+      <div class="g"><span id="roItems" class="v">0</span><span id="roItemsL" class="l">of your things</span></div>
+      <button id="audioBtn" class="g g-btn" type="button" aria-pressed="false" title="Jarvis speaks on this laptop (V)"><span id="roAudio" class="v">off</span><span class="l">laptop voice</span></button>
     </div>
   </footer>
 
@@ -111,7 +111,7 @@
 
   <div id="qrOverlay" class="qr-overlay" hidden>
     <div class="qr-card">
-      <p class="micro">LINK THE SUIT CAMERA</p>
+      <p class="micro">Connect the phone</p>
       <img class="qr big" data-qr alt="QR code: open the camera page on the iPhone">
       <p class="small">Scan with the iPhone camera &middot; Q to close</p>
     </div>
