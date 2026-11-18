@@ -11,6 +11,8 @@ He answers out loud, shows you the photo of where he last saw them, and guides y
 landmarks you walked by. Tell him "I'm leaving my AirPods here" and he saves the spot. If he
 hasn't seen them yet, he keeps looking and speaks up as soon as they appear on camera.
 
+**Try it live:** https://jarvis-wheres-my-stuff.up.railway.app (open it on a laptop, scan the QR with your phone)
+
 **Devpost:** https://devpost.com/software/jarvis-where-is-my-stuff
 
 Built at a Halloween hackathon (Oct 31, 2026), where the theme was dressing up as a character.
@@ -37,7 +39,7 @@ when it turns up on camera.
 
 | | Where | Needs |
 |---|---|---|
-| **Online** | the Railway deployment (see [DEPLOY.md](DEPLOY.md) to host your own) | a laptop browser + a phone |
+| **Online** | https://jarvis-wheres-my-stuff.up.railway.app (to host your own, see [DEPLOY.md](DEPLOY.md)) | a laptop browser + a phone |
 | **On a Mac** | `./start`, below | macOS, an Anthropic API key, an iPhone |
 | **Without a phone** | `./start` + `scripts/replay.py` (a fake walk from `samples/`) | macOS, an API key |
 
