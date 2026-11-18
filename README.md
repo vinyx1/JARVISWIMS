@@ -39,7 +39,7 @@ Ours was Iron Man, with Jarvis as the AI.
 ### Run it on your Mac (one command)
 
 ```bash
-git clone https://github.com/vinyx1/hackathon-to-be-decided.git JARVISWIMS
+git clone https://github.com/vinyx1/JARVISWIMS.git
 cd JARVISWIMS
 ./start
 ```
