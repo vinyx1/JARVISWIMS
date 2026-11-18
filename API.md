@@ -2,6 +2,36 @@
 
 All endpoints are served by the backend on the same origin as the frontend.
 
+**Access key.** When the backend runs with `JARVIS_ACCESS_KEY` (`./start` sets a fresh one each
+run), every request that comes through the tunnel (Cloudflare's `cf-ray` / `cf-connecting-ip`
+headers) or from another machine needs it: `?k=<key>` on the first page load (the QR link), after
+which a `jarvis_key` cookie (HttpOnly, Secure, 12 h) carries it. Without it: `403`. Requests from
+the laptop itself (`localhost`) never need it. No key set means open, as in development.
+
+**Rooms (public mode, `JARVIS_PUBLIC=1`).** Each visitor's data is private. Opening a page hands
+out a `jarvis_room` cookie (HttpOnly, SameSite=Lax, Secure on HTTPS, 7 days). Every endpoint
+below then acts on that visitor's room only: `/log`, `/mine` and `/latest` show only their
+photos, and `/frames/<id>.jpg` only resolves inside their room. Locally there is one shared room.
+
+**Limits (public mode).** Refusals are JSON `{"detail": "<a line Jarvis can say>"}` (an HTML page
+for browser navigations), some with `Retry-After`:
+- `429`: too many requests (per IP; per visitor per endpoint, e.g. 30 `/frame`/min, 12 `/ask`/min),
+  too many new sessions from one IP, or the room's photo cap is reached (`/frame`).
+- `413`: upload too large (photo 3 MB, preview 400 KB, audio 1 MB, request 6 MB). `415`: not a JPEG/PNG.
+- `422`: text fields too long (`question` 400 chars, `item` 80, ...).
+- `403`: a POST whose `Origin` is another site.
+- `503`: every room is in use.
+- Over the daily AI budget, `/ask` still returns `200` with an in-character `answer` saying so.
+
+## GET /join
+
+Public mode. The QR link from `GET /phone`: sets the room cookie for that room and redirects
+(`303`) to `/capture.html`, so the phone joins the HUD's session. Unknown room: `404`.
+
+## GET /healthz
+
+`{"ok": true}`. Liveness only (Railway's health check); never creates a room.
+
 ## POST /frame
 
 Upload one camera frame. Send it as `multipart/form-data`:
@@ -49,15 +79,59 @@ description. The HUD shows it as `REGISTERED · MY <ITEM>`.
   "frames": [ { "id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000, "note": "silver MacBook with a pumpkin sticker" } ] }
 ```
 
-Any frame may also carry an optional `box: [x0, y0, x1, y1]`, the item's position as
-fractions (0–1) of the photo's width and height, from `ai.locate_object`. The HUD draws it
-as a gold outline. A missing box just means no outline; `JARVIS_BOX=0` turns boxes off.
+**Second look for moved items.** When the question names a registered item ("where's my
+bottle?"), the photos since its last confirmed sighting (up to 16: any whose caption hints at the
+item, then the newest; blank frames skipped) are shown again to Sonnet with the item's close-up
+(`ai.look_for`, confidence 0–100 per sighting), alongside the caption answer:
+
+- **80+ (`answer.SURE`)**: the newest such sighting is where it is: `"Aha, found it, sir. Your water
+  bottle was on the carpet by the pink beanbag, …"`. Newer 55–79 sightings are added as "It might
+  also be …".
+- **55–79 only (`answer.MAYBE`)**: `"I can't be certain, sir, but your water bottle might be …"`,
+  then the caption answer's frames.
+- **Nothing at 55+**: the caption answer stands.
+
+Every `find` reply lists its frames newest first (the sure one leads). A `find` about a registered
+item also carries `"item": "water bottle"`, and second-look frames carry `"where"` (the spot, in
+words) and `"sure"` (true/false). The phone's photo wheel uses these:
+
+`/ask` gives up after 12s with an in-character "taking longer than expected" reply. If the
+answer model fails, a keyword search over the captions answers instead.
+
+**Leaving an item somewhere** ("Jarvis, I'm leaving my AirPods here", "I put my keys here",
+"my AirPods are right here", "remember where I put my bottle"): the backend saves what the
+camera sees now, describes the spot, and records it as that item's last-seen location
+(registering the item first if it's new). Reply is `kind: "remember"` with that photo:
+`"Very good, sir. Your airpods: on desk by the window, near the red exit sign."`
+
+## POST /confirm
+
+`{"item": "water bottle", "frame_id": "f_000016", "where": "on the carpet by the laundry basket"}`:
+sir tapped a photo, so that's where it is. It becomes the item's last-seen record (even if older than
+the current one) and ends any watch. `{"answer": "Very good, sir. Noted: your water bottle, on the carpet by the laundry basket."}`; `404` for an unknown item or frame.
+
+## POST /watch
+
+`{"item": "water bottle"}`: sir closed the photos (none was it). Reply
+`{"answer": "Very well, sir. I'll keep looking for your water bottle.", "watching": true}`
+(`watching: false` for an unregistered item). Every later frame is then checked: a `MY <item>`
+caption, or a hint ("possibly sir's …") that a second look puts at 80+, is announced once through
+`/interaction` with `source: null`, so the phone speaks it:
+`"Sir, I know where your water bottle is now. It's on the shelf."` (one `sure` frame). Reset clears watches.
 
 ## GET /interaction
 
-Latest completed phone question and answer for the display-only laptop HUD, or `null`.
-The phone calls `/ask` and plays `/speak` on its own device. The HUD polls this endpoint
-about once a second and displays the question, answer and evidence without recording or speaking.
+The latest completed question and answer, from any device (phone or laptop, voice or typed),
+or `null`. The HUD and the phone both poll it about once a second: the HUD shows it in the chat,
+and every device whose audio switch is on speaks it (phone audio on by default, laptop off).
+Each exchange carries `source`: the random per-page id of the device that asked (sent as `source`
+with `/listen`, or with `/ask` for the asking device's own typed questions; `null` otherwise). A
+device skips only exchanges whose `source` is its own id, because it already spoke those itself.
+
+## POST /client-log
+
+`{"event": "played", "detail": "media"}`: the phone reports how each reply played (media player,
+Web Audio, browser voice) or why it failed, into `data/backend.log` as `phone audio: ...`.
 
 ```json
 { "id": "unique-exchange-id", "question": "Where is my helmet?",
@@ -68,21 +142,63 @@ State is held in memory for one active demo, replaced on each completed `/ask`, 
 cleared on reset or server restart. Reset returns `409` while a question is in flight, so an old registration cannot complete across that reset.
 This is a latest-exchange relay, not a queue for multiple simultaneous users.
 
+## POST /listen
+
+Voice input. The browser records one utterance (`frontend/mic.js`) and sends it as
+`multipart/form-data`: `audio` (16 kHz mono 16-bit WAV) and `mode`:
+
+- `ask`: everything said is the question (push-to-talk, or right after "Jarvis" on its own).
+- `wake`: hands-free; act only if "Jarvis" was said ("Hey Jarvis, where's my helmet?",
+  "Where are my keys, Jarvis?"). Anything else is ignored.
+
+Optional `can_send_still=true`: the sender has a camera. Then "this is my X, remember it" and
+"I'm leaving my X here" come back with `need_still: true` and `result: null`: the sender takes a
+sharp photo, POSTs it to `/still`, and asks the same `question` via `/ask`. Nothing else asks for
+a photo, so ordinary speech uploads audio only. (A `still` file sent with `/listen` is also accepted.)
+A still is used once, and only within 5 s of arriving.
+
+The backend transcribes it locally with Whisper (`backend/stt.py`, no API key) and, if there
+is a question, answers it exactly like `/ask` (so it also shows on the HUD via `/interaction`).
+```json
+{ "heard": "Hey Jarvis, where's my helmet?", "question": "where's my helmet",
+  "armed": false, "need_still": false, "result": { "answer": "…", "kind": "find", "frames": [] } }
+```
+`answer=false` (what the phone and HUD send): only transcribe and check for "Jarvis"; `result` is
+`null` and the page plays its acknowledgement chime, then asks `question` via `/ask` (with its
+`source`). Two steps, so the chime comes the moment Jarvis is addressed, not after the answer.
+
+`armed: true` means "Jarvis" was said with nothing after it: send the next utterance with
+`mode=ask`. `result` is `null` when there was nothing to answer. `400` for a bad WAV, `503`
+if speech recognition is unavailable.
+
+## POST /still
+
+`multipart/form-data` with `image`: a sharp photo of what the camera sees now. The phone sends
+it just before a typed question, so a typed "this is my X" gets the same clear look. `{"ok": true}`.
+
 ## POST /speak
 
 ```json
 { "text": "Very good, sir." }
 ```
-Returns `200 audio/mpeg` in Jarvis's ElevenLabs voice, or `204` when it can't (no
-`ELEVENLABS_API_KEY`, slow, or failed). On `204` the HUD speaks with the browser's British voice.
+Returns `200 audio/mpeg` in Jarvis's ElevenLabs voice if `ELEVENLABS_API_KEY` is set, else
+`200 audio/wav` from the Mac's `say` (the best installed Daniel voice), or `204` if both fail;
+then the page speaks with the browser's British voice.
 
 ## GET /mine
 
 The registered items, oldest first. Cleared by `POST /reset`.
 ```json
-[ { "item": "laptop", "description": "silver MacBook with a pumpkin sticker", "frame_id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000 } ]
+[ { "item": "laptop", "description": "silver MacBook with a pumpkin sticker", "frame_id": "f_000140", "url": "/frames/f_000140.jpg", "ts": 1730400000000,
+    "last_seen": { "frame_id": "f_000188", "url": "/frames/f_000188.jpg", "ts": 1730400300000,
+                   "where": "on desk by the window", "room": "workspace tables", "landmarks": ["window"] } } ]
 ```
+Registration studies the item once with a stronger model: a description, up to five
+distinguishing `marks` (scratches, stickers, wear), and a close-up crop kept as its reference
+photo. Every later snapshot is checked against that close-up and those marks.
 After registration, captions write the item as `"MY laptop (silver MacBook, pumpkin sticker) on table"`.
+Every such caption, and every "I'm leaving my X here", updates `last_seen` (optional; only newer
+frames replace it). It never expires, so "where's my laptop?" works however long ago that was.
 
 ## POST /preview  ·  GET /preview.jpg
 
@@ -107,6 +223,18 @@ Returns the full caption log as a JSON array of `LogEntry`. For debugging and th
 ## POST /reset
 
 Clears the log, stored frames, the preview and registered items (`/mine`). Use it between demo runs.
+Captions still running from before the reset are dropped, so it's safe while the phone is capturing.
+
+## GET /health
+
+```json
+{ "ai_ok": false, "ai_error": "AuthenticationError: ... invalid x-api-key", "frames": 12,
+  "speech_ready": true, "items": 2,
+  "budget": { "day": "2026-11-18", "spent_usd": 0.42, "daily_usd": 2.0, "room_spent_usd": 0.05, "room_usd": 0.25 } }
+```
+`budget`: today's (UTC) estimated Claude spend, all visitors and this room, against the caps.
+`ai_ok` turns false when a Claude call fails (bad key, no network) and true again on the next
+success. A failing AI never crashes anything; captions just become "unclear frame", so check this.
 
 ## Types
 

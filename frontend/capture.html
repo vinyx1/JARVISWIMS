@@ -2,61 +2,52 @@
 <html lang="en">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
   <meta name="color-scheme" content="dark">
-  <title>Suit camera · J.A.R.V.I.S.</title>
-  <link rel="stylesheet" href="style.css">
+  <meta name="theme-color" content="#000000">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <title>J.A.R.V.I.S.</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Michroma&family=Barlow:wght@300;400&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="phone.css">
 </head>
-<body class="phone-capture">
-  <main class="capture-shell">
-    <div class="preview">
-      <video id="phoneVideo" autoplay playsinline muted aria-label="Phone camera preview"></video>
+<body data-phase="start">
+  <!-- The suit camera. Just the camera; say "Jarvis" and he appears. Old controls: capture-debug.html -->
+  <video id="cam" autoplay playsinline muted aria-label="Camera"></video>
+
+  <section id="start" class="start" aria-live="polite">
+    <h1 class="wordmark">J.A.R.V.I.S.</h1>
+    <p id="startText" class="start-text">Camera and microphone are used to find your things.</p>
+    <button id="begin" class="begin" type="button">Begin</button>
+  </section>
+
+  <!-- Siri-style: pops up when he's addressed -->
+  <section id="assist" class="assist" aria-live="polite" aria-hidden="true">
+    <canvas id="core" class="core"></canvas>
+    <p id="heard" class="heard"></p>
+    <p id="said" class="said"></p>
+  </section>
+
+  <!-- Where he saw it: a wheel of photos, the one he's sure of first, then where it might be.
+       Tap the photo if that's it; × if none of them is (he keeps looking). -->
+  <section id="found" class="found" aria-label="Where Jarvis saw it" hidden>
+    <div class="found-wheel">
+      <button id="foundPrev" class="found-nav" type="button" aria-label="Previous photo">‹</button>
+      <figure id="foundCard" class="found-card">
+        <button id="foundShot" class="found-shot" type="button" aria-label="That's it"><img id="foundImg" alt=""></button>
+        <figcaption>
+          <b id="foundTag"></b>
+          <span id="foundNote"></span>
+          <small id="foundHint"></small>
+        </figcaption>
+      </figure>
+      <button id="foundNext" class="found-nav" type="button" aria-label="Next photo">›</button>
     </div>
-    <header class="phone-topbar">
-      <span class="eyebrow">J.A.R.V.I.S. · SUIT CAMERA</span>
-      <a href="/">HUD ↗</a>
-    </header>
-    <span id="phoneBadge" class="live-label">CAMERA OFF</span>
-    <details id="phoneMenu" class="phone-panel">
-      <summary class="phone-menu-toggle">Camera &amp; voice <span class="phone-menu-chevron" aria-hidden="true">⌄</span></summary>
-      <div class="phone-menu-content">
-      <div class="phone-camera-controls">
-      <p id="phoneStatus" role="status">Camera is off. Tap Start to allow camera access.</p>
-      <label class="field-label" for="phoneDevice">CAMERA SOURCE</label>
-      <select id="phoneDevice"><option value="">Rear camera (default)</option></select>
-      <div class="capture-controls">
-        <button id="phoneStart" class="button primary" type="button">Start capture</button>
-        <button id="phoneStop" class="button secondary" type="button" disabled>Stop</button>
-      </div>
-      </div>
-      <section class="phone-voice-controls" aria-label="Jarvis voice">
-        <h2>Talk to Jarvis</h2>
-        <p id="phoneVoiceStatus" role="status">Use this device's microphone and speaker.</p>
-        <div class="phone-talk-actions">
-          <button id="phoneTalk" class="button primary" type="button">Talk to Jarvis</button>
-          <button id="phoneVoiceOff" class="button secondary" type="button">Mute / cancel</button>
-        </div>
-        <div class="phone-voice-options">
-          <label class="phone-toggle"><input id="phoneHandsFree" type="checkbox"> Hands-free: just say "Hey Jarvis, …"</label>
-          <label class="field-label" for="phoneOutput">JARVIS SPEAKS ON</label>
-          <select id="phoneOutput"><option value="phone">This phone</option><option value="laptop">The laptop (Mac speakers)</option><option value="both">Both (phone + laptop)</option></select>
-        </div>
-        <p id="phoneHeard" class="phone-heard" aria-live="polite"></p>
-        <p id="phoneAnswer" class="phone-answer" aria-live="polite"></p>
-        <button id="phoneReplay" class="button secondary" type="button" hidden>Play reply</button>
-        <form id="phoneAskForm" class="phone-ask">
-          <label class="sr-only" for="phoneQuestion">Question for Jarvis</label>
-          <input id="phoneQuestion" placeholder="Or type a question…" autocomplete="off" maxlength="500">
-          <button class="button secondary" type="submit">Send</button>
-        </form>
-      </section>
-      <details class="phone-info">
-        <summary>Capture &amp; privacy</summary>
-        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. Voice uses this device’s microphone only after you tap Talk. Browser speech recognition may send audio to its speech service. Mute / cancel stops voice. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
-      </details>
-      </div>
-    </details>
-  </main>
-  <script type="module" src="capture.js"></script>
+    <p id="foundCount" class="found-count"></p>
+    <button id="foundClose" class="found-close" type="button" aria-label="None of these">×</button>
+  </section>
+
+  <p id="toast" class="toast" role="status" hidden></p>
+  <script type="module" src="phone.js"></script>
 </body>
 </html>

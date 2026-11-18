@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="color-scheme" content="dark">
+  <title>Suit camera (debug) · J.A.R.V.I.S.</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body class="phone-capture">
+  <main class="capture-shell">
+    <div class="preview">
+      <video id="phoneVideo" autoplay playsinline muted aria-label="Phone camera preview"></video>
+    </div>
+    <header class="phone-topbar">
+      <span class="eyebrow">J.A.R.V.I.S. · SUIT CAMERA</span>
+      <a href="/">HUD ↗</a>
+    </header>
+    <span id="phoneBadge" class="live-label">CAMERA OFF</span>
+    <details id="phoneMenu" class="phone-panel">
+      <summary class="phone-menu-toggle">Camera &amp; voice <span class="phone-menu-chevron" aria-hidden="true">⌄</span></summary>
+      <div class="phone-menu-content">
+      <div class="phone-camera-controls">
+      <p id="phoneStatus" role="status">Camera is off. Tap Start to allow camera access.</p>
+      <label class="field-label" for="phoneDevice">CAMERA SOURCE</label>
+      <select id="phoneDevice"><option value="">Rear camera (default)</option></select>
+      <div class="capture-controls">
+        <button id="phoneStart" class="button primary" type="button">Start capture</button>
+        <button id="phoneStop" class="button secondary" type="button" disabled>Stop</button>
+      </div>
+      </div>
+      <section class="phone-voice-controls" aria-label="Jarvis voice">
+        <h2>Talk to Jarvis</h2>
+        <p id="phoneVoiceStatus" role="status">Tap anywhere to start listening for "Jarvis, …".</p>
+        <div class="mic-meter" aria-hidden="true"><span id="phoneLevel"></span></div>
+        <button id="phoneTalk" class="button primary talk-button" type="button">🎙 Hold to talk</button>
+        <div class="phone-voice-options">
+          <label class="phone-toggle"><input id="phoneHandsFree" type="checkbox" checked> Hands-free: just say "Jarvis, …"</label>
+          <label class="phone-toggle"><input id="phoneAudio" type="checkbox" checked> 🔊 Jarvis's voice on this phone</label>
+        </div>
+        <p id="phoneHeard" class="phone-heard" aria-live="polite"></p>
+        <p id="phoneAnswer" class="phone-answer" aria-live="polite"></p>
+        <button id="phoneReplay" class="button secondary" type="button" hidden>Play reply</button>
+        <form id="phoneAskForm" class="phone-ask">
+          <label class="sr-only" for="phoneQuestion">Question for Jarvis</label>
+          <input id="phoneQuestion" placeholder="Or type a question…" autocomplete="off" maxlength="500">
+          <button class="button secondary" type="submit">Send</button>
+        </form>
+      </section>
+      <details class="phone-info">
+        <summary>Capture &amp; privacy</summary>
+        <p>Keep this page open. A photo goes to Jarvis every 3 seconds, alongside a faster live preview. Images go to the configured backend and may be sent to an external AI service. Stop releases the camera. Hands-free is on by default: after your first tap, the microphone listens for "Jarvis" until you switch it off or leave the page. What you say is transcribed on the laptop (Whisper, offline); only the text goes to the AI. On iPhone, use the HTTPS capture URL supplied by the demo host.</p>
+      </details>
+      </div>
+    </details>
+  </main>
+  <script type="module" src="capture.js"></script>
+</body>
+</html>

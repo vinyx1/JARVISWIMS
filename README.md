@@ -5,7 +5,67 @@ Dress as Iron Man, hold up your phone, walk around, then say
 
 See `CLAUDE.md` for the plan, roles and rules, and `API.md` for the contract.
 
-## Setup (each teammate, once)
+## Quick start (one command)
+
+```bash
+./start
+```
+
+Or double-click **`Start Jarvis.command`** in Finder. The first run installs what it needs
+(uv, cloudflared, Python packages) and asks for your Anthropic API key. Every run then:
+
+1. checks the API key actually works,
+2. starts the backend and a fresh HTTPS tunnel for the iPhone,
+3. opens the HUD in Chrome, showing a **QR code**: scan it with the iPhone camera, tap
+   Start on the page that opens. The same QR prints in the terminal; press **Q** on the HUD
+   to show it big at any time.
+
+**Locked to your QR:** each `./start` makes a new random key and builds it into the QR link.
+Only phones that scan it can use the app through the tunnel; anyone else with the bare link
+gets "Access denied". The HUD on the laptop needs no key. Mind that the QR on the projector is
+the key: anyone who scans it while it's up gets in (it hides once the camera feed starts).
+
+`./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
+**The phone** is just the camera: tap **Begin** (it asks for the camera, then the microphone),
+then say "Jarvis, …" any time; a Siri-style Jarvis slides up with your question and his answer.
+Hold anywhere on the screen to talk without saying "Jarvis". The old phone controls (camera
+picker, typed questions, audio switch) are at `/capture-debug.html`. On the HUD, **hold Space** and speak. **Audio:** every device with its audio on speaks every answer. Phone audio is on
+by default (switch on the capture page); laptop audio is off by default (**V**). Speech is
+transcribed on the laptop by Whisper (offline, free); the first run downloads its model (~480 MB).
+
+**Finding your own things:** "Jarvis, this is my AirPods, remember it" registers them. When you
+put them down, say **"Jarvis, I'm leaving my AirPods here"**: he saves the spot from the camera.
+Later, "where are my AirPods?" answers from that spot (or a newer sighting), however long ago.
+The HUD's MY ITEMS shows where each was last seen.
+
+**The HUD** (`localhost:8000`) opens with an intro that waits on **Engage** (click it, or press
+Enter; any key fast-forwards the intro, and that click also unlocks audio). Then it shows Jarvis as a
+hologram core that reacts like Siri: amber when he hears "Jarvis", spinning up while he thinks,
+pulsing while he answers, with the photo of where he saw your item. **D** switches to the debug
+view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS) and back.
+The previous HUD is also saved as the git tag `ui-classic`.
+
+**Walkthrough:** press **H** (or **How it works** on the HUD) for a six-step guided demo: scan the
+QR, look around, teach him your things, tell him where you put one, go about your day, ask.
+← → or Back/Next step through it.
+Play with the core: hover to draw a constellation, click to drop linked nodes, drag to spin the
+rings, double-click to overcharge it.
+Laptop audio: click the **audio** gauge (bottom right), or press **V**.
+HUD keys (also listed under **Commands**, or press **?**): **H** walkthrough · **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
+**Q** phone QR · **D** debug view · **R** clear memory. Hands-free listening is on the phone.
+
+**Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →
+Manage Voices → English (UK) → download **Daniel (Enhanced)**. Restart `./start`; Jarvis uses it
+automatically.
+
+## Put it online (Railway)
+
+Anyone can try it from their own laptop and phone, with no tunnel and no Mac running: push this
+repo to Railway and it builds the `Dockerfile` in **public mode**. Each visitor gets a private
+session, with rate limits, upload caps and a $2/day AI budget. Setup steps and every protection:
+**[DEPLOY.md](DEPLOY.md)**.
+
+## Manual setup (development)
 
 ```bash
 brew install uv                  # if missing

@@ -1,6 +1,8 @@
 // Framework-free state/validation shared by the UI and its tests.
-export function createCaptureLoop({sample, upload, onSaved, onError, schedule=setInterval, cancel=clearInterval, intervalMs=3000}) {
-  let timer=null, generation=0, busy=false, running=false;
+// A dropped upload (tunnel blip) keeps capturing; only maxFailures in a row stop the loop.
+// onError(error, {stopped}) says which happened.
+export function createCaptureLoop({sample, upload, onSaved, onError, schedule=setInterval, cancel=clearInterval, intervalMs=3000, maxFailures=5}) {
+  let timer=null, generation=0, busy=false, running=false, failures=0;
   async function tick() {
     if (!running || busy) return;
     const current=generation; busy=true;
@@ -8,13 +10,16 @@ export function createCaptureLoop({sample, upload, onSaved, onError, schedule=se
       const frame=await sample();
       if (!frame || current!==generation || !running) return;
       const result=await upload(frame.blob,frame.ts);
-      if(current===generation && running) onSaved(result);
+      if(current===generation && running) { failures=0; onSaved(result); }
     } catch(error) {
-      if(current===generation && running) { stop(); onError(error); }
+      if(current===generation && running) {
+        const stopped=++failures>=maxFailures; if(stopped) stop();
+        onError(error,{stopped});
+      }
     } finally { busy=false; }
   }
   function stop() { running=false; generation++; if(timer!==null) cancel(timer); timer=null; }
-  return {start() { if(running || busy) return false; running=true; generation++; timer=schedule(tick,intervalMs); void tick(); return true; },stop,get running(){return running;},get pending(){return busy;}};
+  return {start() { if(running || busy) return false; running=true; failures=0; generation++; timer=schedule(tick,intervalMs); void tick(); return true; },stop,get running(){return running;},get pending(){return busy;}};
 }
 export function formatSeenAt(ts, now=Date.now()) {
   if(typeof ts!=='number'||!Number.isFinite(ts)||ts<=0||ts>now) return 'Time unavailable';

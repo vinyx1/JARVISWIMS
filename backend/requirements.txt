@@ -4,3 +4,7 @@ python-multipart
 python-dotenv
 anthropic
 httpx
+segno
+faster-whisper
+numpy
+pillow

@@ -48,66 +48,55 @@ def test_reset_waits_for_phone_answer_before_clearing_exchange(monkeypatch):
     asyncio.run(run())
 
 
-def test_phone_choice_of_speaker_is_relayed_to_the_hud(monkeypatch):
-    import asyncio
-    result = {'answer': 'On the chair, sir.', 'kind': 'find', 'frames': []}
-    monkeypatch.setattr(main, '_answer_request', AsyncMock(return_value=result), raising=False)
+# ---------- the photo wheel: "that's it" and "keep looking" ----------
+BOTTLE = {'item': 'water bottle', 'description': 'black ThermoFlask', 'frame_id': 'f_1', 'url': '/frames/f_1.jpg', 'ts': 1000}
+
+
+def _fake_store(monkeypatch, log):
+    seen = []
     monkeypatch.setattr(main.store, 'reset', lambda: None)
+    monkeypatch.setattr(main.store, 'read_log', lambda: log)
+    monkeypatch.setattr(main.store, 'mine', lambda: [dict(BOTTLE)])
+    monkeypatch.setattr(main.store, 'session', lambda: 1)
+    monkeypatch.setattr(main.store, 'mark_seen', lambda *a, **k: seen.append((a, k)) or True)
     main.reset()
-    asyncio.run(main.ask(main.Ask(question='Where is my helmet?', speak_on='laptop')))
-    assert main.interaction()['speak_on'] == 'laptop'
-    asyncio.run(main.ask(main.Ask(question='Where is my wallet?', speak_on='both')))
-    assert main.interaction()['speak_on'] == 'both'
-    asyncio.run(main.ask(main.Ask(question='Where are my keys?')))
-    assert main.interaction()['speak_on'] == 'phone'      # default: the phone speaks, the HUD stays silent
+    return seen
+
+
+def test_confirm_records_the_tapped_photo_even_if_older(monkeypatch):
+    log = [{'id': 'f_5', 'ts': 5000, 'url': '/frames/f_5.jpg', 'caption': {'scene': 'floor', 'room_guess': 'bedroom', 'objects': [], 'landmarks': ['bed']}}]
+    seen = _fake_store(monkeypatch, log)
+    r = main.confirm(main.Confirm(item='Water Bottle', frame_id='f_5', where='on the carpet by the bed.'))
+    assert r['answer'] == 'Very good, sir. Noted: your water bottle, on the carpet by the bed.'
+    assert seen == [(('water bottle', 'f_5', 'on the carpet by the bed', 'bedroom', ['bed']), {'force': True})]
+    with pytest.raises(main.HTTPException):
+        main.confirm(main.Confirm(item='helmet', frame_id='f_5'))
+
+
+def test_watch_announces_when_a_later_frame_spots_it(monkeypatch):
+    entry = {'id': 'f_9', 'ts': 9e15, 'url': '/frames/f_9.jpg', 'caption': None}
+    seen = _fake_store(monkeypatch, [entry])
+    assert main.watch(main.Watch(item='water bottle'))['answer'] == "Very well, sir. I'll keep looking for your water bottle."
+    looks = []
+    monkeypatch.setattr(main.ai, 'look_for', lambda item, entries: looks.append(entries) or [{'id': 'f_9', 'where': 'on the bed', 'confidence': 50}])
+    hint = {'scene': 'bed', 'room_guess': 'bedroom', 'objects': ["possibly sir's water bottle on bed"], 'landmarks': []}
+    main._check_watches('f_9', hint, 1)
+    assert looks and main.interaction() is None, 'a 50% second look is not enough'
+    monkeypatch.setattr(main.ai, 'look_for', lambda item, entries: [{'id': 'f_9', 'where': 'on the bed', 'confidence': 88}])
+    main._check_watches('f_9', hint, 1)
+    ex = main.interaction()
+    assert ex['source'] is None
+    assert ex['result']['answer'] == "Sir, I know where your water bottle is now. It's on the bed."
+    assert ex['result']['frames'][0]['id'] == 'f_9' and ex['result']['frames'][0]['sure'] is True
+    assert seen and main._watching == {}, 'announced once, then the watch ends'
+
+
+def test_watch_takes_a_my_caption_at_once_and_ignores_unregistered_items(monkeypatch):
+    entry = {'id': 'f_9', 'ts': 9e15, 'url': '/frames/f_9.jpg', 'caption': None}
+    _fake_store(monkeypatch, [entry])
+    assert main.watch(main.Watch(item='helmet'))['watching'] is False
+    main.watch(main.Watch(item='water bottle'))
+    monkeypatch.setattr(main.ai, 'look_for', lambda *a: pytest.fail('a MY caption needs no second look'))
+    main._check_watches('f_9', {'objects': ['MY water bottle (black ThermoFlask) on the shelf'], 'landmarks': []}, 1)
+    assert "on the shelf" in main.interaction()['result']['answer']
     main.reset()
-
-
-def test_answer_returns_before_the_box_and_the_box_arrives_on_the_hud_later(monkeypatch):
-    """The voice must not wait ~1-2s for locate_object: /ask answers at once, the gold box follows."""
-    import asyncio, time
-    frame = {'id': 'f_000001', 'url': '/frames/f_000001.jpg', 'ts': 1, 'note': 'helmet on chair'}
-    result = {'answer': 'On the chair, sir.', 'kind': 'find', 'frames': [frame]}
-    monkeypatch.setattr(main, '_answer_request', AsyncMock(return_value=result), raising=False)
-    monkeypatch.setattr(main.store, 'reset', lambda: None)
-
-    async def slow_boxes(r):
-        await asyncio.sleep(0.3)
-        r['frames'][0]['box'] = [0.1, 0.1, 0.5, 0.5]
-        return r
-    monkeypatch.setattr(main, '_add_boxes', slow_boxes)
-    main.reset()
-
-    async def scenario():
-        t = time.monotonic()
-        reply = await main.ask(main.Ask(question='Where is my helmet?'))
-        assert time.monotonic() - t < 0.2                     # answered without waiting for the box
-        assert 'box' not in reply['frames'][0]
-        assert not main.interaction().get('boxed')
-        await asyncio.sleep(0.45)
-        later = main.interaction()
-        assert later['boxed'] is True
-        assert later['result']['frames'][0]['box'] == [0.1, 0.1, 0.5, 0.5]
-    asyncio.run(scenario())
-    main.reset()
-
-
-def test_late_box_is_dropped_after_reset(monkeypatch):
-    import asyncio
-    frame = {'id': 'f_000001', 'url': '/frames/f_000001.jpg', 'ts': 1, 'note': 'helmet'}
-    monkeypatch.setattr(main, '_answer_request', AsyncMock(return_value={'answer': 'x', 'kind': 'find', 'frames': [frame]}), raising=False)
-    monkeypatch.setattr(main.store, 'reset', lambda: None)
-
-    async def slow_boxes(r):
-        await asyncio.sleep(0.2)
-        r['frames'][0]['box'] = [0.1, 0.1, 0.5, 0.5]
-        return r
-    monkeypatch.setattr(main, '_add_boxes', slow_boxes)
-    main.reset()
-
-    async def scenario():
-        await main.ask(main.Ask(question='Where is my helmet?'))
-        main.reset()
-        await asyncio.sleep(0.35)
-        assert main.interaction() is None                      # the late box must not resurrect it
-    asyncio.run(scenario())

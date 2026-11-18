@@ -1,19 +1,19 @@
-import {createApi} from './api.js';
+import {createApi,clientId} from './api.js';
 import {createCameraController,listCameras,captureFrame} from './camera.js';
 import {createCaptureLoop} from './core.js';
 import {createPreviewSender} from './preview.js';
 const $=id=>document.getElementById(id),video=$('phoneVideo'),api=createApi();
-let generation=0,opening=false,uncertain=false,wakeLock=null;
+let generation=0,opening=false,wakeLock=null;
 function status(text,error=false){$('phoneStatus').textContent=text;$('phoneStatus').classList.toggle('error',error);}
-function controls(){ $('phoneStart').disabled=opening||loop.running||loop.pending||uncertain;$('phoneStop').disabled=!opening&&!camera.stream;$('phoneDevice').disabled=opening||!!camera.stream;$('phoneBadge').textContent=loop.running?'CAPTURING':camera.stream?'PREVIEW':'CAMERA OFF';}
+function controls(){ $('phoneStart').disabled=opening||loop.running||loop.pending;$('phoneStop').disabled=!opening&&!camera.stream;$('phoneDevice').disabled=opening||!!camera.stream;$('phoneBadge').textContent=loop.running?'CAPTURING':camera.stream?'PREVIEW':'CAMERA OFF';}
 async function releaseWake(){const lock=wakeLock;wakeLock=null;if(lock)await lock.release().catch(()=>{});}
 function stop(){generation++;opening=false;loop.stop();preview.stop();camera.stop();void releaseWake();status('Capture stopped. Saved photos remain on the laptop.');controls();}
 const camera=createCameraController({media:{getUserMedia:constraints=>{
  const requested=$('phoneDevice').value;
- if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1280},height:{ideal:720}};
+ if(!requested)constraints.video={facingMode:{ideal:'environment'},width:{ideal:1920},height:{ideal:1080}};
  return navigator.mediaDevices.getUserMedia(constraints);
 }},attach(stream){video.srcObject=stream;if(stream)video.play().catch(()=>{});},onEnded(){stop();status('Camera disconnected. Tap Start to reconnect.',true);}});
-const loop=createCaptureLoop({sample:()=>captureFrame(video),async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}catch(error){if(error.uncertain){uncertain=true;status(error.message,true);}throw error;}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error){preview.stop();status(error.message,true);controls();void releaseWake();}});
+const loop=createCaptureLoop({sample:()=>captureFrame(video,{width:1024,quality:.8}),/* sharp enough for small things */async upload(blob,ts){status('Uploading snapshot…');try{return await api.uploadFrame(blob,ts);}finally{setTimeout(controls,0);}},onSaved(result){status(result.caption===null?'Snapshot saved. The laptop is analyzing it.':'Snapshot saved to the laptop.');controls();},onError(error,{stopped}){if(!stopped){status(`Upload failed, retrying… (${error.message})`,true);return;}preview.stop();camera.stop();status(`Capture stopped after repeated upload failures: ${error.message} Tap Start to retry.`,true);controls();void releaseWake();}});
 $('phoneStart').onclick=async()=>{
  if(!navigator.mediaDevices?.getUserMedia){status('Camera access needs HTTPS (or localhost). Open the secure URL from the laptop.',true);return;}
  const token=++generation;opening=true;controls();status('Waiting for camera permission…');
@@ -25,6 +25,7 @@ $('phoneStart').onclick=async()=>{
   const devices=await listCameras();if(token!==generation)return;
   $('phoneDevice').replaceChildren();for(const [i,device] of devices.entries()){const option=document.createElement('option');option.value=device.deviceId;option.textContent=device.label||`Camera ${i+1}`;$('phoneDevice').append(option);}if(selected)$('phoneDevice').value=selected;
   loop.start();preview.start();status('Capturing. Keep this page in the foreground.');
+  void startHandsFree();   // now ask for the mic (camera permission is settled)
   if(navigator.wakeLock?.request){navigator.wakeLock.request('screen').then(lock=>{if(token===generation&&loop.running)wakeLock=lock;else void lock.release();}).catch(()=>{});}
  }catch(error){if(token===generation){camera.stop();status(error.name==='NotAllowedError'?'Camera permission denied. Allow access and retry.':error.message,true);}}
  finally{if(token===generation){opening=false;controls();}}
@@ -43,50 +44,146 @@ const preview=createPreviewSender({
  canSend:()=>loop.running&&!document.hidden
 });
 
-// Phone owns voice; the laptop polls completed exchanges without recording or speaking.
-import {createPhoneConversation,createDeviceSpeaker} from './phone-voice.js';
-import {createWakeListener} from './wake.js';
-const questionApi=createApi({timeoutMs:25000});
-let lastReply='',playbackBlocked=false;
-const speaker=createDeviceSpeaker({onBlocked(){playbackBlocked=true;$('phoneVoiceStatus').textContent='Tap Play reply to allow audio, or read the answer below.';}});
-const voiceStates={ready:'Ready. Tap Talk for your next question.',listening:'Listening… speak, then pause. Tap again to finish.',thinking:'Checking the footage…',speaking:'Jarvis is replying on this device.',denied:'Microphone blocked. Allow access in browser settings, or type below.',unsupported:'Speech recognition is unavailable here. Type your question below.', 'no-speech':'No speech captured. Tap Talk to try again.', 'recognition-error':'Speech recognition failed. Try again or type below.',error:'Could not complete the question. Try again.',off:'Microphone and reply audio are off.'};
-const OUTPUT_KEY='jarvisOutput';
-try{const saved=localStorage.getItem(OUTPUT_KEY);if(saved)$('phoneOutput').value=saved;}catch{}
-$('phoneOutput').onchange=()=>{try{localStorage.setItem(OUTPUT_KEY,$('phoneOutput').value);}catch{}};
-const output=()=>$('phoneOutput').value;                       // 'phone' | 'laptop' | 'both'
-const onLaptop=()=>output()==='laptop';                          // laptop only: the phone stays silent
-const replySpeaker={unlock:()=>speaker.unlock(),stop:()=>speaker.stop(),play:text=>onLaptop()?Promise.resolve():speaker.play(text)};
-const phoneVoice=createPhoneConversation({
- Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- speaker:replySpeaker,ask:question=>questionApi.askQuestion(question,{speak_on:output()}),
- onState(state){
-   if(!(state==='ready'&&playbackBlocked))$('phoneVoiceStatus').textContent=voiceStates[state]||state;
-   if(state==='speaking'&&onLaptop())$('phoneVoiceStatus').textContent='Jarvis is replying on the laptop.';
-   if(state==='speaking'&&output()==='both')$('phoneVoiceStatus').textContent='Jarvis is replying here and on the laptop.';
-   if(['ready','no-speech','recognition-error','error'].includes(state))resumeHandsFree();
-   $('phoneTalk').textContent=state==='listening'?'Finish speaking':'Talk to Jarvis';
-   const busy=state==='thinking'||state==='speaking';$('phoneTalk').disabled=busy;$('phoneAskForm').querySelector('button').disabled=busy;$('phoneReplay').disabled=busy;
- },
- onHeard(text){$('phoneHeard').textContent=`You: ${text}`;},
- onAnswer(result){lastReply=result.answer;playbackBlocked=false;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=false;},
- onError(error){$('phoneAnswer').textContent=error.message;}
+// ---------- voice: hands-free "Jarvis, …" (on by default), or hold to talk ----------
+// Audio is recorded here (mic.js) and transcribed on the laptop by Whisper (POST /listen).
+// Every device with its audio switched on speaks every answer, whoever asked.
+import {createMic} from './mic.js';
+import {createConversation} from './listen.js';
+import {createDeviceSpeaker} from './speaker.js';
+import {createLatestPoller} from './core.js';
+const voiceApi=createApi({timeoutMs:30000});
+let lastReply='';
+const say=text=>{$('phoneVoiceStatus').textContent=text;};
+// Replies play automatically; "Play reply" only appears if the phone blocked the sound.
+const speaker=createDeviceSpeaker({
+  onBlocked(){$('phoneReplay').hidden=false;say('The phone blocked the sound. Tap "Play reply" to hear Jarvis.');},
+  // how each reply played (or why not) goes to the laptop's log: data/backend.log, "phone audio: ..."
+  onEvent:(event,detail)=>{fetch('/client-log',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({event,detail})}).catch(()=>{});},
 });
-$('phoneTalk').onclick=()=>{playbackBlocked=false;wake.stop();phoneVoice.listen();};
-// Hands-free: keep listening for "Jarvis …". Paused while Jarvis answers (an open iPhone mic can
-// route the reply to the quiet earpiece), resumed afterwards.
-const wake=createWakeListener({
- Recognition:window.SpeechRecognition||window.webkitSpeechRecognition,
- isBusy:()=>phoneVoice.busy,
- onQuestion(question){wake.stop();playbackBlocked=false;$('phoneHandsFree').checked=true;void phoneVoice.submit(question);},
- onState(state){if(state==='hands-free')$('phoneVoiceStatus').textContent='Hands-free: say "Hey Jarvis, …"';
-  if(state==='armed')$('phoneVoiceStatus').textContent='Yes, sir? Go ahead.';
-  if(state==='denied'){$('phoneHandsFree').checked=false;$('phoneVoiceStatus').textContent=voiceStates.denied;}}
+
+// Phone audio: on by default, remembered on this phone.
+const AUDIO_KEY='jarvisPhoneAudio';
+try{if(localStorage.getItem(AUDIO_KEY)==='0')$('phoneAudio').checked=false;}catch{}
+$('phoneAudio').onchange=()=>{try{localStorage.setItem(AUDIO_KEY,$('phoneAudio').checked?'1':'0');}catch{}if($('phoneAudio').checked)speaker.unlock();else speaker.stop();};
+const audioOn=()=>$('phoneAudio').checked;
+async function speakHere(text){
+  if(!audioOn())return;
+  mic.pause();   // the mic stays on, but ignores Jarvis's own voice
+  try{await speaker.play(text);}finally{await mic.resume();}
+}
+
+const handsFree=()=>$('phoneHandsFree').checked;
+const idle=()=>handsFree()?(mic.on?'Listening: say "Jarvis, …" (or hold the button).':'Tap anywhere to start listening for "Jarvis, …".'):'Hold the button and speak, or turn on hands-free.';
+const states={
+  listening:idle, recording:()=>'Listening… let go when you\'re done.', thinking:()=>'Checking the footage…',
+  armed:()=>'Yes, sir? Go ahead.', speaking:()=>audioOn()?'Jarvis is replying.':'Answer below (phone audio is off).',
+  'not-heard':()=>'I didn\'t catch that. Try again.', denied:()=>'Microphone blocked. Allow it in Settings → Safari → Microphone, then reload.',
+  error:()=>'Something went wrong. Try again.', off:idle,
+};
+
+function showAnswer(result){lastReply=result.answer;$('phoneAnswer').textContent=result.answer;$('phoneReplay').hidden=true;}
+const mic=createMic({
+  onUtterance:(wav,info)=>void convo.handle(wav,info),
+  onLevel:level=>{$('phoneLevel').style.width=`${Math.round(level*100)}%`;},
+  onState:s=>{if(states[s])say(states[s]());},
 });
-function resumeHandsFree(){if($('phoneHandsFree').checked&&!wake.on&&!document.hidden)wake.start();}
-$('phoneHandsFree').onchange=()=>{speaker.unlock();if($('phoneHandsFree').checked)wake.start();else wake.stop();};
-$('phoneVoiceOff').onclick=()=>{phoneVoice.cancel();wake.stop();$('phoneHandsFree').checked=false;};
-$('phoneReplay').onclick=()=>{speaker.unlock();playbackBlocked=false;void speaker.play(lastReply);};
-$('phoneAskForm').onsubmit=e=>{e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question||phoneVoice.busy)return;$('phoneQuestion').value='';playbackBlocked=false;void phoneVoice.submit(question);};
-if(!(window.SpeechRecognition||window.webkitSpeechRecognition)){$('phoneTalk').disabled=true;$('phoneVoiceStatus').textContent=voiceStates.unsupported;}
-document.addEventListener('visibilitychange',()=>{if(document.hidden){phoneVoice.cancel();wake.stop();}});
-window.addEventListener('pagehide',()=>{phoneVoice.cancel();wake.stop();});
+// A sharp, full-resolution photo of what the camera sees right now, sent with what sir says,
+// so "Jarvis, this is my ___, remember it" gets a clear look at the item. Null if the camera is off.
+async function sharpStill(){
+  if(!camera.stream||video.readyState<2)return null;
+  try{return (await captureFrame(video,{width:1920,quality:.88}))?.blob||null;}catch{return null;}
+}
+const convo=createConversation({
+  // Audio only; a photo is sent only when the laptop asks for one ("this is my X, remember it").
+  // two steps: transcribe (and chime the moment "Jarvis" is confirmed), then ask
+  listen:(wav,mode)=>voiceApi.listen(wav,mode,!!camera.stream,{answer:false}),
+  ask:question=>voiceApi.askQuestion(question,{mine:true}),
+  onAccepted:()=>{if(audioOn())speaker.chime();},
+  async askWithPhoto(question){const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});return voiceApi.askQuestion(question,{mine:true});},
+  mic, speak:speakHere,
+  onState:s=>{if(states[s])say(states[s]());$('phoneTalk').disabled=s==='thinking';},
+  onHeard:text=>{$('phoneHeard').textContent=`You: ${text}`;},
+  onAnswer:result=>showAnswer(result),
+  onError:error=>{$('phoneAnswer').textContent=error.message;},
+});
+
+// Hands-free needs one tap first (iPhone only opens the mic from a tap): Start capture,
+// the switch, or a tap anywhere on the page.
+async function startHandsFree(){
+  if(!handsFree()||mic.on||!navigator.mediaDevices?.getUserMedia)return;
+  speaker.unlock(); mic.auto=true;
+  try{await mic.start();}catch{/* onState already explained (e.g. denied) */}
+}
+// Every tap also re-unlocks audio, so a later reply can play by itself.
+// Start capture is special: asking for the camera and the mic at the same moment can confuse
+// iOS Safari, so that tap only unlocks audio, and the mic is requested once the camera is on.
+document.addEventListener('pointerdown',e=>{
+  speaker.unlock();
+  if(e.target?.closest?.('#phoneStart')){if(handsFree())mic.prime();return;}
+  void startHandsFree();
+},{capture:true});
+$('phoneHandsFree').onchange=async()=>{
+  speaker.unlock();
+  if(handsFree()){mic.auto=true;if(mic.on)await mic.resume();else await startHandsFree();say(idle());}
+  else{mic.auto=false;convo.cancel();mic.stop();}
+};
+
+// Hold to talk: press = record, release = send. Works with hands-free on or off.
+async function talkDown(e){
+  e.preventDefault();
+  if(convo.busy){speaker.stop();return;}   // tapping while Jarvis talks cuts him off
+  speaker.unlock(); speaker.stop();
+  $('phoneTalk').classList.add('held');
+  mic.hold(true);
+  if(!mic.on){try{await mic.start();}catch{$('phoneTalk').classList.remove('held');mic.hold(false);return;}}
+  else await mic.resume();
+}
+function talkUp(e){
+  e?.preventDefault(); if(!$('phoneTalk').classList.contains('held'))return;
+  $('phoneTalk').classList.remove('held');
+  // The mic stays open after the first hold, so later holds start instantly (no new prompt).
+  const outcome=mic.hold(false);
+  if(outcome==='not-ready')say(mic.on?'Microphone ready. Now hold the button while you speak.':'Allow the microphone, then hold the button while you speak.');
+  if(outcome==='too-short')say('Too short. Keep holding the button while you speak.');
+}
+$('phoneTalk').addEventListener('pointerdown',talkDown);
+for(const ev of ['pointerup','pointercancel','pointerleave'])$('phoneTalk').addEventListener(ev,talkUp);
+$('phoneTalk').addEventListener('contextmenu',e=>e.preventDefault());
+
+$('phoneReplay').onclick=()=>{$('phoneReplay').hidden=true;speaker.unlock();void speaker.play(lastReply);};
+$('phoneAskForm').onsubmit=async e=>{
+  e.preventDefault();const question=$('phoneQuestion').value.trim();if(!question)return;
+  $('phoneQuestion').value='';speaker.unlock();say(states.thinking());$('phoneHeard').textContent=`You: ${question}`;
+  if(audioOn())speaker.chime();   // typed: acknowledge on send
+  try{const still=await sharpStill();if(still)await voiceApi.uploadStill(still).catch(()=>{});
+    const result=await voiceApi.askQuestion(question,{mine:true});showAnswer(result);say(states.speaking());await speakHere(result.answer);}
+  catch(error){$('phoneAnswer').textContent=error.message;}
+  say(idle());
+};
+
+// Answers to questions asked elsewhere (the laptop's mic or chat box): show them, and speak
+// them here too if phone audio is on. Never replay an answer that existed before this page loaded.
+let seenExchange=null, firstPoll=true;
+const exchanges=createLatestPoller({
+  load:()=>voiceApi.getInteraction(),
+  onUpdate(exchange){
+    const first=firstPoll; firstPoll=false;
+    if(!exchange||exchange.id===seenExchange)return;
+    seenExchange=exchange.id;
+    if(first)return;
+    // This phone's own question: it speaks that reply itself. Anything else (the laptop's mic or
+    // chat box) is spoken here too, even while the mic is busy hearing chatter.
+    if(exchange.source===clientId)return;
+    $('phoneHeard').textContent=`Laptop: ${exchange.question}`;showAnswer(exchange.result);
+    void speakHere(exchange.result.answer);
+  },
+  onError(){/* the next poll retries */},
+});
+exchanges.start();
+
+if(!navigator.mediaDevices?.getUserMedia){$('phoneTalk').disabled=true;$('phoneHandsFree').disabled=true;say('The microphone needs HTTPS. Open the link from the laptop\'s QR code.');}
+else say(idle());
+// Page hidden: release the mic. Hands-free stays switched on and restarts on the next tap.
+function hush(){convo.cancel();speaker.stop();mic.stop();say(idle());}
+document.addEventListener('visibilitychange',()=>{if(document.hidden)hush();});
+window.addEventListener('pagehide',()=>{hush();exchanges.stop();});

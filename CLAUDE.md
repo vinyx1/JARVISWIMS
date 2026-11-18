@@ -12,19 +12,19 @@ item was, and walks you back past the landmarks.
 
 Read `API.md` for the frontend/backend contract and `README.md` for setup.
 
-## Team and ownership — agents MUST respect this
+## Ownership
 
-| Person | Role | Files they may edit |
+The hackathon team has disbanded; **Vince now owns the whole repo** and agents may edit any
+file. The per-person split below is history, kept so the "Owner:" comments in files make sense.
+
+| Person (former) | Role | Files |
 |---|---|---|
 | Jogindar | A — frontend (laptop HUD + phone capture page) | `frontend/**` |
 | Vince | B — backend, tunnel, demo server | `backend/main.py`, `backend/store.py`, `backend/requirements.txt`, `scripts/**` |
 | Kenny | C — AI eyes: per-frame captions, demo-route photos | `backend/ai.py`, `prompts/caption.md`, `samples/**`, `tests/real_log.json` |
-| Paul | D — AI brain and voice: answers, Jarvis's personality, answer tests, stretch commentary; pitch, Devpost and backup video from 1:30 | `backend/answer.py`, `prompts/answer.md`, `tests/**` |
+| Paul | D — AI brain and voice: answers, Jarvis's personality, answer tests | `backend/answer.py`, `prompts/answer.md`, `tests/**` |
 
-- Only edit files you own. If you need a change elsewhere, stop and tell your
-  human so they can ask the owner.
-- `API.md` and `CLAUDE.md` are shared. Do not change them without the team agreeing.
-  If the contract changes, update `API.md` in the same commit.
+- If the contract changes, update `API.md` in the same commit.
 
 ## Architecture
 
@@ -65,10 +65,11 @@ photos of the demo route, in walking order (`01.jpg`…), and
 
 ## Integration rules (so the pieces line up)
 
-1. **Run the smoke test before and after merging to `main`.** With the backend running:
-   `backend/.venv/bin/python scripts/smoke.py` resets, replays `samples/`, waits
-   for captions, asks a question, and checks every response against `API.md`.
-   **Don't merge if it prints FAIL.**
+1. **Run the smoke test before and after merging to `main`.** It resets the server it
+   tests, so run it against a spare server with its own data folder (see the top of
+   `scripts/smoke.py`), never the demo server. It replays `samples/`, waits for captions,
+   asks a question, and checks every response against `API.md`. **Don't merge if it
+   prints FAIL**, and read any WARN: "the AI is failing" means a bad key or no network.
 2. **Kenny → Paul handoff (the weakest seam).** Paul's prompt reads Kenny's
    captions, so the words must match: "helmet" in a caption, not "dark headgear".
    As soon as real captions work, Kenny commits them as `tests/real_log.json`
@@ -115,6 +116,10 @@ photos of the demo route, in walking order (`01.jpg`…), and
   `cloudflared tunnel --url http://localhost:8000` (no account needed) so the
   iPhone can open the camera over HTTPS. The HUD itself uses `localhost:8000`. Use a phone
   hotspot, not venue Wi-Fi. During development, everyone runs their own backend locally.
+  Since the hackathon there is also a **public deployment** on Railway (`Dockerfile`,
+  `JARVIS_PUBLIC=1`): a private room per visitor, rate limits and a daily AI budget. See
+  `DEPLOY.md`. Any new endpoint must work per room (`store.current()`), and any new Claude call
+  must go through `budget.check()` / `budget.charge()`.
 - **Live demo (~60s, rehearsed):** start capture, walk past 2–3 distinctive
   landmarks, put the Iron Man helmet (or a jacket) down, walk back to the stage,
   then say "Jarvis, where did I leave my helmet?"
@@ -150,9 +155,6 @@ photos of the demo route, in walking order (`01.jpg`…), and
 ## Still undecided
 
 - Project/submission name. Candidates: "Jarvis, Where's My Helmet?", "J.A.R.V.I.S. Lost & Found Protocol".
-- `prompts/` still uses the old ghost persona. Kenny rewrites `caption.md`, Paul rewrites `answer.md` as Jarvis.
-- `frontend/index.html` is currently the capture page. Jogindar moves it to
-  `capture.html` and makes `index.html` the HUD.
 - Is there a better mic than the laptop's built-in one (wired earbuds with a mic)?
 
 ## Git rules

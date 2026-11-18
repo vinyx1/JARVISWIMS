@@ -24,10 +24,13 @@ test('capture remains bounded and ignores a stopped session result', async () =>
   loop.start(); await new Promise(r=>setTimeout(r,0)); await callback(); assert.equal(uploads,1);
   loop.stop(); pending.resolve({id:'old'}); await new Promise(r=>setTimeout(r,0)); assert.equal(saved.length,0);
 });
-test('capture errors stop automatic retries', async () => {
-  let failures=0;
-  const loop=createCaptureLoop({sample:async()=>({blob:new Blob(),ts:1}),upload:async()=>{throw Error('offline');},onSaved:()=>{},onError:()=>failures++,schedule:()=>1,cancel:()=>{}});
-  loop.start(); await new Promise(r=>setTimeout(r,0)); assert.equal(loop.running,false); assert.equal(failures,1);
+test('one failed upload keeps capturing; repeated failures stop', async () => {
+  const seen=[]; let tick;
+  const loop=createCaptureLoop({sample:async()=>({blob:new Blob(),ts:1}),upload:async()=>{throw Error('offline');},onSaved:()=>{},onError:(e,{stopped})=>seen.push(stopped),schedule:f=>{tick=f;return 1;},cancel:()=>{},maxFailures:3});
+  const flush=()=>new Promise(r=>setTimeout(r,0));
+  loop.start(); await flush(); assert.equal(loop.running,true); assert.deepEqual(seen,[false]);
+  await tick(); await flush(); assert.equal(loop.running,true);
+  await tick(); await flush(); assert.equal(loop.running,false); assert.deepEqual(seen,[false,false,true]);
 });
 test('unknown and future times never look recent',()=>{
  assert.equal(formatSeenAt(null,10000),'Time unavailable'); assert.equal(formatSeenAt(20000,10000),'Time unavailable'); assert.equal(formatSeenAt(5000,10000),'5 seconds ago');
