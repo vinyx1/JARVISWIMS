@@ -1,117 +1,160 @@
-# J.A.R.V.I.S. (project name TBD)
+# JARVIS: Where Is My Stuff? (JARVISWIMS)
 
-Dress as Iron Man, hold up your phone, walk around, then say
-**"Jarvis, where did I leave my helmet?"**
+Dress as Iron Man, hold up your phone, walk around, then ask
+**"Jarvis, where did I leave my helmet?"**, and Jarvis answers in a British voice and shows
+you the photo of where he last saw it.
 
-See `CLAUDE.md` for the plan, roles and rules, and `API.md` for the contract.
+**Devpost:** https://devpost.com/software/jarvis-where-is-my-stuff
 
-## Quick start (one command)
+Built at a Halloween hackathon (Oct 31, 2026), where the theme was dressing up as a character.
+Ours was Iron Man, with Jarvis as the AI.
+
+## How it works
+
+```
+ iPhone (camera)           Server (FastAPI)                         Laptop (HUD)
+ a photo every ~3 s  ──▶   Claude Haiku captions each photo   ◀──   hologram Jarvis, live view
+ "Jarvis, where's…?" ──▶   Whisper hears it, Claude Sonnet    ──▶   answer + the photo of
+                           answers from the caption log             where he saw it
+```
+
+1. The **phone** is the camera. It sends a photo every few seconds and listens for "Jarvis".
+2. **Claude Haiku 5.5** captions every photo in the background: the room, the objects, the landmarks.
+3. You **teach Jarvis your things**: "Jarvis, this is my AirPods, remember it." He studies them
+   (description, distinguishing marks, a close-up) so he recognises them later.
+4. You ask. **Whisper** (running on the server, free and offline) turns speech into text, and
+   **Claude Sonnet 5.5** answers from the captions. For your registered items, it takes a second
+   look at the photos since they were last seen.
+5. The **HUD** on the laptop shows Jarvis reacting (listening, thinking, answering), the photo
+   of where your item is, and the walk back past landmarks.
+
+## Try it
+
+| | Where | Needs |
+|---|---|---|
+| **Online** | the Railway deployment (see [DEPLOY.md](DEPLOY.md) to host your own) | a laptop browser + a phone |
+| **On a Mac** | `./start`, below | macOS, an Anthropic API key, an iPhone |
+| **Without a phone** | `./start` + `scripts/replay.py` (a fake walk from `samples/`) | macOS, an API key |
+
+### Run it on your Mac (one command)
 
 ```bash
+git clone https://github.com/vinyx1/hackathon-to-be-decided.git JARVISWIMS
+cd JARVISWIMS
 ./start
 ```
 
 Or double-click **`Start Jarvis.command`** in Finder. The first run installs what it needs
-(uv, cloudflared, Python packages) and asks for your Anthropic API key. Every run then:
+(uv, cloudflared, the Python packages, Whisper's ~480 MB speech model) and asks for your
+Anthropic API key. Every run then:
 
 1. checks the API key actually works,
-2. starts the backend and a fresh HTTPS tunnel for the iPhone,
-3. opens the HUD in Chrome, showing a **QR code**: scan it with the iPhone camera, tap
-   Start on the page that opens. The same QR prints in the terminal; press **Q** on the HUD
-   to show it big at any time.
+2. starts the server and a fresh HTTPS tunnel for the iPhone (its camera only works over HTTPS),
+3. opens the HUD in Chrome with a **QR code**: scan it with the iPhone and tap **Begin**.
 
-**Locked to your QR:** each `./start` makes a new random key and builds it into the QR link.
-Only phones that scan it can use the app through the tunnel; anyone else with the bare link
-gets "Access denied". The HUD on the laptop needs no key. Mind that the QR on the projector is
-the key: anyone who scans it while it's up gets in (it hides once the camera feed starts).
+`./start --keep` restarts without clearing Jarvis's memory. Ctrl-C (or closing the window) stops
+everything. `./start` needs macOS and [Homebrew](https://brew.sh); on Linux or Windows, use the
+Docker image from [DEPLOY.md](DEPLOY.md) or the manual setup below.
 
-`./start --keep` restarts without clearing memory. Ctrl-C (or closing the window) stops it.
-**The phone** is just the camera: tap **Begin** (it asks for the camera, then the microphone),
-then say "Jarvis, …" any time; a Siri-style Jarvis slides up with your question and his answer.
-Hold anywhere on the screen to talk without saying "Jarvis". The old phone controls (camera
-picker, typed questions, audio switch) are at `/capture-debug.html`. On the HUD, **hold Space** and speak. **Audio:** every device with its audio on speaks every answer. Phone audio is on
-by default (switch on the capture page); laptop audio is off by default (**V**). Speech is
-transcribed on the laptop by Whisper (offline, free); the first run downloads its model (~480 MB).
+### Put it online
 
-**Finding your own things:** "Jarvis, this is my AirPods, remember it" registers them. When you
-put them down, say **"Jarvis, I'm leaving my AirPods here"**: he saves the spot from the camera.
-Later, "where are my AirPods?" answers from that spot (or a newer sighting), however long ago.
-The HUD's MY ITEMS shows where each was last seen.
+Push this repo to Railway and it builds the `Dockerfile` in **public mode**: each visitor gets a
+private session, with rate limits, upload caps and a $2/day AI budget. Every step and every
+protection is in **[DEPLOY.md](DEPLOY.md)**.
 
-**The HUD** (`localhost:8000`) opens with an intro that waits on **Engage** (click it, or press
-Enter; any key fast-forwards the intro, and that click also unlocks audio). Then it shows Jarvis as a
-hologram core that reacts like Siri: amber when he hears "Jarvis", spinning up while he thinks,
-pulsing while he answers, with the photo of where he saw your item. **D** switches to the debug
-view (`/debug.html`: live camera, what he sees, chat, possible matches, MY ITEMS) and back.
-The previous HUD is also saved as the git tag `ui-classic`.
+## Using it
 
-**Walkthrough:** press **H** (or **How it works** on the HUD) for a six-step guided demo: scan the
-QR, look around, teach him your things, tell him where you put one, go about your day, ask.
-← → or Back/Next step through it.
-Play with the core: hover to draw a constellation, click to drop linked nodes, drag to spin the
-rings, double-click to overcharge it.
-Laptop audio: click the **audio** gauge (bottom right), or press **V**.
-HUD keys (also listed under **Commands**, or press **?**): **H** walkthrough · **Space** (hold) talk · **V** laptop audio on/off · **Enter** type a question ·
-**Q** phone QR · **D** debug view · **R** clear memory. Hands-free listening is on the phone.
+**Talking to Jarvis**
+- On the phone: say **"Jarvis, …"** any time (hands-free), or hold anywhere on the screen and speak.
+- On the HUD: **hold Space** and speak, or press **Enter** to type.
 
-**Better voice (free):** System Settings → Accessibility → Spoken Content → System voice →
-Manage Voices → English (UK) → download **Daniel (Enhanced)**. Restart `./start`; Jarvis uses it
-automatically.
+**Things to say**
+| Say | What happens |
+|---|---|
+| "Jarvis, this is my AirPods, remember it" | registers the item from the camera view |
+| "Jarvis, I'm leaving my AirPods here" | saves the spot as where it is now |
+| "Jarvis, where are my AirPods?" | the answer + the photo where he last saw it |
+| "Jarvis, where did I leave my helmet?" | works for anything he has seen, registered or not |
 
-## Put it online (Railway)
+If none of the photos he shows is right, close them and he keeps looking. He'll speak up
+when it turns up on camera.
 
-Anyone can try it from their own laptop and phone, with no tunnel and no Mac running: push this
-repo to Railway and it builds the `Dockerfile` in **public mode**. Each visitor gets a private
-session, with rate limits, upload caps and a $2/day AI budget. Setup steps and every protection:
-**[DEPLOY.md](DEPLOY.md)**.
+**HUD keys** (also under **Commands**, or press **?**)
+| Key | Does |
+|---|---|
+| **H** | six-step guided walkthrough |
+| **Space** (hold) | talk |
+| **Enter** | type a question |
+| **V** | laptop audio on/off (phone audio is on by default) |
+| **Q** | show the phone QR big |
+| **D** | debug view: live camera, captions, chat, possible matches, MY ITEMS |
+| **R** | clear Jarvis's memory (do it before every demo) |
 
-## Manual setup (development)
+The HUD opens with an intro: click **Engage** (that click also unlocks audio). Play with the
+core: hover to draw constellations, click to drop nodes, drag to spin the rings, double-click
+to overcharge it.
+
+## Good to know
+
+- **It costs a little.** Every photo and question is a Claude call on your API key: by our
+  estimate, around 10 to 20 cents for a 10-minute walk with a few questions. The public deployment caps itself at $2/day; on your own key,
+  set a spend limit in the [Anthropic console](https://console.anthropic.com) too.
+- **Privacy.** Photos are sent to Anthropic's API to be captioned and are stored only on the
+  server running Jarvis (your Mac, or the Railway volume). Online, each visitor's photos are
+  private to their session and deleted after 60 minutes idle.
+- **The QR code is the key.** Locally, each `./start` makes a new random key and builds it into
+  the QR; anyone without it gets "Access denied". But anyone who scans the QR while it's on
+  screen (a projector!) gets in. It hides once the camera feed starts.
+- **Browsers.** Built and tested with Chrome on a Mac (HUD) and Safari on an iPhone (phone).
+- **Better voice (free, Mac).** System Settings → Accessibility → Spoken Content → System voice
+  → Manage Voices → English (UK) → download **Daniel (Enhanced)**, then restart `./start`.
+  Optional: an `ELEVENLABS_API_KEY` in `.env` gives him an ElevenLabs voice.
+- **Live demo tips.** Use a phone hotspot rather than venue Wi-Fi, press **R** before each run,
+  set iPhone Auto-Lock to Never, and keep the phone page in front (it holds a wake lock).
+
+## Development
+
+**Manual setup**
 
 ```bash
-brew install uv                  # if missing
-git clone https://github.com/vinyx1/hackathon-to-be-decided.git
-cd hackathon-to-be-decided
-cp .env.example .env             # paste the team's ANTHROPIC_API_KEY
-cd backend && uv venv && uv pip install -r requirements.txt && cd ..
-```
-
-## Run the backend
-
-```bash
+brew install uv                  # or: curl -LsSf https://astral.sh/uv/install.sh | sh
+cp .env.example .env             # add your ANTHROPIC_API_KEY
+uv venv backend/.venv && uv pip install --python backend/.venv/bin/python -r backend/requirements.txt
 backend/.venv/bin/uvicorn main:app --app-dir backend --reload --host 0.0.0.0 --port 8000
 ```
 
-The HUD is at http://localhost:8000.
+The HUD is at http://localhost:8000. For the phone, run `cloudflared tunnel --url http://localhost:8000`
+and open the printed `https://….trycloudflare.com/capture.html` in Safari.
 
-## Fake a walk (no phone needed)
-
-With the backend running, in a second terminal:
-
-```bash
-backend/.venv/bin/python scripts/replay.py --reset          # sends samples/*.jpg every 3s
-backend/.venv/bin/python scripts/replay.py --every 1        # faster
-```
-
-`samples/` holds ~15 photos of the real demo route, in walking order (`01.jpg`, `02.jpg`, …).
-
-## Smoke test (before and after every merge)
+**Fake a walk (no phone):** with the server running, in a second terminal:
 
 ```bash
-backend/.venv/bin/python scripts/smoke.py           # PASS or FAIL, end to end
+backend/.venv/bin/python scripts/replay.py --reset          # sends samples/*.jpg every 3 s
 ```
 
-## Run on the iPhone (Vince's laptop only; the camera needs HTTPS)
+`ECHO_STUB_AI=1` in the server's environment returns fake captions, so you can work on the UI
+with no API key or cost.
+
+**Tests**
 
 ```bash
-brew install cloudflared                              # once; no account needed
-cloudflared tunnel --url http://localhost:8000
+backend/.venv/bin/python -m pytest tests                    # backend
+node --test frontend/test/*.test.mjs                        # frontend
+backend/.venv/bin/python scripts/smoke.py --url http://localhost:8010   # end to end
 ```
 
-Open the printed `https://….trycloudflare.com/capture.html` on the iPhone in Safari.
-The URL changes every time cloudflared restarts.
+The smoke test resets the server it tests, so point it at a spare one
+(`JARVIS_DATA=/tmp/jarvis-smoke … --port 8010`), never the demo. It also runs on every PR.
 
-## Demo tips
+**Where things are**
 
-- Use a phone hotspot instead of venue Wi-Fi.
-- Press **R** on the HUD (or `POST /reset`) before each run.
-- Keep the capture page in the foreground. It requests a wake lock so the screen stays on.
+| Path | What |
+|---|---|
+| `backend/main.py` | the API, rooms, security (rate limits, caps, headers) |
+| `backend/ai.py` · `prompts/caption.md` | Jarvis's eyes: captions, studying items, second looks |
+| `backend/answer.py` · `prompts/answer.md` | Jarvis's brain: answers and personality |
+| `backend/stt.py` · `backend/voice.py` | ears (Whisper) and voice (ElevenLabs / Mac voice) |
+| `backend/store.py` · `backend/budget.py` | photo storage per session · the daily AI budget |
+| `frontend/index.html` · `capture.html` | the HUD · the phone page |
+| `API.md` · `CLAUDE.md` · `DEPLOY.md` | the API contract · project notes · hosting it |
+| `samples/` | photos of the demo route, for fake walks and tests |
