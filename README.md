@@ -1,13 +1,24 @@
 # JARVIS: Where Is My Stuff? (JARVISWIMS)
 
-Dress as Iron Man, hold up your phone, walk around, then ask
-**"Jarvis, where did I leave my helmet?"**, and Jarvis answers in a British voice and shows
-you the photo of where he last saw it.
+**A memory for your things.** Everyone loses their keys, AirPods or wallet, and the usual fix
+(retracing your steps, hoping you remember) doesn't work. JARVIS remembers for you.
+
+Carry your phone with its camera on as you move around. Jarvis watches quietly, notes what he
+sees and where, and learns which things are yours. When something goes missing, just ask:
+
+> **"Jarvis, where did I leave my keys?"**
+
+He answers out loud, shows you the photo of where he last saw them, and guides you back past the
+landmarks you walked by. Tell him "I'm leaving my AirPods here" and he saves the spot. If he
+hasn't seen them yet, he keeps looking and speaks up as soon as they appear on camera.
+
+It's Tony Stark's AI butler for the rest of us: hands-free, polite, very British, and running
+on a phone and a laptop.
 
 **Devpost:** https://devpost.com/software/jarvis-where-is-my-stuff
 
 Built at a Halloween hackathon (Oct 31, 2026), where the theme was dressing up as a character.
-Ours was Iron Man, with Jarvis as the AI.
+We went as Iron Man, so the demo is: put down the helmet, walk away, and ask Jarvis to find it.
 
 ## How it works
 
