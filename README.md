@@ -1,6 +1,10 @@
 # JARVIS: Where Is My Stuff? (JARVISWIMS)
 
-**A memory for your things.** Everyone loses their keys, AirPods or wallet, and the usual fix
+Built for Hack or Treat 2026
+
+**Devpost:** https://devpost.com/software/jarvis-where-is-my-stuff
+
+Everyone loses their keys, AirPods or wallet, and the usual fix
 (retracing your steps, hoping you remember) doesn't work. JARVIS remembers for you.
 
 Carry your phone with its camera on as you move around. Jarvis will record your surroundings, noting down objects it sees and learns which ones are yours. When something goes missing, just ask:
@@ -12,11 +16,6 @@ landmarks you walked by. Tell him "I'm leaving my AirPods here" and he saves the
 hasn't seen them yet, he keeps looking and speaks up as soon as they appear on camera.
 
 **Try it live:** https://jarvis-wheres-my-stuff.up.railway.app (open it on a laptop, scan the QR with your phone)
-
-**Devpost:** https://devpost.com/software/jarvis-where-is-my-stuff
-
-Built at a Halloween hackathon (Oct 31, 2026), where the theme was dressing up as a character.
-We went as Iron Man, so the demo is: put down the helmet, walk away, and ask Jarvis to find it.
 
 ## Using it
 
