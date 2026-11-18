@@ -72,7 +72,8 @@ everyone else sees "Access denied". Rooms still keep each person's data separate
 | `JARVIS_MAX_FRAMES` / `JARVIS_MAX_ITEMS` | 400 / 12 | per room |
 | `JARVIS_MAX_LOG_ENTRIES` | 200 | captions sent with each question (lower = cheaper answers) |
 | `JARVIS_STT_CONCURRENCY` | 2 | voice clips transcribed at once |
-| `ELEVENLABS_API_KEY` | unset | the ElevenLabs voice; unset = the browser's voice. It costs credits per answer |
+| `ELEVENLABS_API_KEY` | unset | the ElevenLabs voice instead of Piper. It costs credits per answer |
+| `JARVIS_PIPER_VOICE` | `/opt/piper/en_GB-alan-medium.onnx` | Jarvis's free voice (Piper, baked into the image). Another British male option: `en_GB-northern_english_male-medium` (download it into `/data/piper` with `python -m piper.download_voices`) |
 
 Whisper model: for better accuracy in noise, set the service variable `STT_MODEL=small.en`
 (Railway passes it to the Dockerfile's `ARG STT_MODEL`) and redeploy. It needs ~1 GB more RAM.

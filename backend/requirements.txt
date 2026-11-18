@@ -8,3 +8,4 @@ segno
 faster-whisper
 numpy
 pillow
+piper-tts

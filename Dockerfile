@@ -20,13 +20,17 @@ ARG STT_MODEL=base.en
 ENV JARVIS_STT_MODEL=${STT_MODEL}
 RUN python -c "from faster_whisper import WhisperModel; WhisperModel('${STT_MODEL}', device='cpu', compute_type='int8')"
 
+# Jarvis's voice: Linux has no macOS `say`, so Piper speaks instead, with a British male voice
+# (en_GB-alan-medium, ~60 MB). JARVIS_PIPER_VOICE can point at another downloaded voice.
+RUN python -m piper.download_voices --download-dir /opt/piper en_GB-alan-medium
+
 COPY backend backend
 COPY frontend frontend
 COPY prompts prompts
 
 # Run as an unprivileged user. Railway mounts the volume at /data owned by root, so the start
 # command fixes its ownership, then drops privileges before starting the server.
-RUN useradd --system --uid 10001 --home /app jarvis && mkdir -p /data && chown -R jarvis /data /opt/hf
+RUN useradd --system --uid 10001 --home /app jarvis && mkdir -p /data && chown -R jarvis /data /opt/hf /opt/piper
 
 EXPOSE 8000
 # One worker on purpose: rooms, rate limits and the budget live in this process's memory.

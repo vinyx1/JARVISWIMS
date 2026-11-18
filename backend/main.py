@@ -37,6 +37,7 @@ import answer  # noqa: E402
 import budget  # noqa: E402  (daily spending cap on Claude calls)
 import store  # noqa: E402
 import stt  # noqa: E402  (local Whisper: speech to text)
+import piper_voice  # noqa: E402  (free British voice on Linux / Railway)
 import voice  # noqa: E402  (Paul's ElevenLabs wrapper)
 
 log = logging.getLogger("uvicorn.error")
@@ -779,7 +780,8 @@ def _say_wav(text: str) -> bytes | None:
 @app.post("/speak")
 async def speak(body: Speak):
     """Jarvis's voice as audio: ElevenLabs if ELEVENLABS_API_KEY is set, else the Mac's Daniel voice
-    via `say`. 204 only if both fail; then the HUD falls back to the browser's speechSynthesis."""
+    via `say`, else Piper (Linux / Railway: piper_voice.py). 204 only if all fail; then the page
+    falls back to the browser's speechSynthesis (which iPhones often block)."""
     text = (body.text or "").strip()
     if not text:
         return Response(status_code=204)
@@ -787,7 +789,7 @@ async def speak(body: Speak):
         mp3 = await asyncio.to_thread(voice.synthesize, text)
         if mp3:
             return Response(mp3, media_type="audio/mpeg", headers={"Cache-Control": "no-store"})
-        wav = await asyncio.to_thread(_say_wav, text)
+        wav = await asyncio.to_thread(_say_wav, text) or await asyncio.to_thread(piper_voice.synthesize, text)
         if wav:
             return Response(wav, media_type="audio/wav", headers={"Cache-Control": "no-store"})
     except Exception:
@@ -906,6 +908,8 @@ def reset():
 @app.on_event("startup")
 def _load_ears():
     stt.warm_up()
+    if not shutil.which("say"):
+        piper_voice.warm_up()
     if PUBLIC:
         def sweep():   # delete rooms nobody has used for a while (their photos too)
             while True:
